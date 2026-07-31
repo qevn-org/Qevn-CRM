@@ -15,9 +15,11 @@ export default function AuthLayout({
       <div className="relative z-10 w-full max-w-md">
         {/* Logo Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary shadow-xl shadow-primary/30 mb-4">
-            <span className="text-xl font-black text-primary-foreground">Q</span>
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="Qevn Logo" 
+            className="h-16 w-auto object-contain rounded-2xl p-1 mb-2 shadow-sm"
+          />
           <h1 className="text-2xl font-bold tracking-tight text-foreground">QEVN CRM</h1>
           <p className="text-xs text-muted-foreground mt-1">Client Follow-up & CRM Suite</p>
         </div>
