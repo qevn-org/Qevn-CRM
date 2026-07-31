@@ -73,9 +73,11 @@ export const Sidebar: React.FC = () => {
       {/* Sidebar Header */}
       <div className={`flex h-16 items-center px-4 border-b border-border/20 ${sidebarOpen ? 'justify-between' : 'justify-center'}`}>
         <Link href="/" className="flex items-center space-x-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shadow-lg shadow-primary/30">
-            <span className="text-sm font-black text-primary-foreground">Q</span>
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="QEVN Logo" 
+            className="h-8 w-8 rounded-lg object-contain bg-white p-0.5 shadow-md shadow-primary/10"
+          />
           {sidebarOpen && (
             <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/75 bg-clip-text text-transparent">
               QEVN CRM
