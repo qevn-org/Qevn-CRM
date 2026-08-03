@@ -9,7 +9,9 @@ import {
   Document, 
   Activity, 
   EmailLog, 
-  CalendarIntegration 
+  CalendarIntegration,
+  TwilioIntegration,
+  CallLog
 } from './mock-db';
 
 // Helper to generate IDs when in mock mode
@@ -676,5 +678,145 @@ export const db = {
       }
     }
     return true;
+  },
+
+  // -------------------------------------------------------------------------
+  // TWILIO INTEGRATION METHODS
+  // -------------------------------------------------------------------------
+  async getTwilioIntegration(userId: string): Promise<TwilioIntegration | null> {
+    const client = supabaseAdmin || supabase;
+    if (client && useSupabase(userId)) {
+      try {
+        const { data, error } = await client
+          .from('twilio_integrations')
+          .select('*')
+          .eq('employee_id', userId)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.error('[DB] getTwilioIntegration error:', err);
+      }
+    }
+    const mockDb = getMockDB();
+    return mockDb.twilio_integrations?.find(t => t.employee_id === userId) || null;
+  },
+
+  async saveTwilioIntegration(integration: Omit<TwilioIntegration, 'id' | 'updated_at'>): Promise<TwilioIntegration | null> {
+    const now = new Date().toISOString();
+    const mockDb = getMockDB();
+    if (!mockDb.twilio_integrations) mockDb.twilio_integrations = [];
+
+    const idx = mockDb.twilio_integrations.findIndex(t => t.employee_id === integration.employee_id);
+    const newIntegration: TwilioIntegration = {
+      ...integration,
+      id: idx !== -1 ? mockDb.twilio_integrations[idx].id : genId('tw'),
+      updated_at: now
+    };
+
+    if (idx !== -1) {
+      mockDb.twilio_integrations[idx] = newIntegration;
+    } else {
+      mockDb.twilio_integrations.push(newIntegration);
+    }
+    saveMockDB(mockDb);
+
+    const client = supabaseAdmin || supabase;
+    if (client && useSupabase(integration.employee_id)) {
+      try {
+        const { data, error } = await client
+          .from('twilio_integrations')
+          .upsert({ ...integration, updated_at: now }, { onConflict: 'employee_id' })
+          .select()
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.error('[DB] saveTwilioIntegration error:', err);
+      }
+    }
+
+    return newIntegration;
+  },
+
+  // -------------------------------------------------------------------------
+  // CALL LOGS METHODS
+  // -------------------------------------------------------------------------
+  async getCallLogs(userId: string, role: string = 'employee'): Promise<CallLog[]> {
+    const client = supabaseAdmin || supabase;
+    if (client) {
+      try {
+        let query = client.from('call_logs').select('*');
+        if (role !== 'admin') {
+          query = query.eq('employee_id', userId);
+        }
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (!error && data) return data;
+      } catch (err) {
+        console.error('[DB] getCallLogs error:', err);
+      }
+    }
+    const mockDb = getMockDB();
+    const logs = mockDb.call_logs || [];
+    if (role === 'admin') return logs;
+    return logs.filter(l => l.employee_id === userId);
+  },
+
+  async createCallLog(call: Omit<CallLog, 'id' | 'created_at'>): Promise<CallLog | null> {
+    const now = new Date().toISOString();
+    const newLog: CallLog = {
+      ...call,
+      id: genId('call'),
+      created_at: now
+    };
+
+    const mockDb = getMockDB();
+    if (!mockDb.call_logs) mockDb.call_logs = [];
+    mockDb.call_logs.unshift(newLog);
+    saveMockDB(mockDb);
+
+    const client = supabaseAdmin || supabase;
+    if (client && useSupabase(call.employee_id)) {
+      try {
+        const { data, error } = await client
+          .from('call_logs')
+          .insert({ ...call, created_at: now })
+          .select()
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.error('[DB] createCallLog error:', err);
+      }
+    }
+
+    return newLog;
+  },
+
+  async updateCallLog(callId: string, updates: Partial<CallLog>): Promise<CallLog | null> {
+    const mockDb = getMockDB();
+    if (!mockDb.call_logs) mockDb.call_logs = [];
+    const idx = mockDb.call_logs.findIndex(l => l.id === callId);
+
+    let updated: CallLog | null = null;
+    if (idx !== -1) {
+      mockDb.call_logs[idx] = { ...mockDb.call_logs[idx], ...updates };
+      updated = mockDb.call_logs[idx];
+      saveMockDB(mockDb);
+    }
+
+    const client = supabaseAdmin || supabase;
+    if (client && useSupabase(callId)) {
+      try {
+        const { data, error } = await client
+          .from('call_logs')
+          .update(updates)
+          .eq('id', callId)
+          .select()
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.error('[DB] updateCallLog error:', err);
+      }
+    }
+
+    return updated;
   }
 };

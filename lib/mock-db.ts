@@ -123,6 +123,42 @@ export interface CalendarIntegration {
   created_at: string;
 }
 
+export interface TwilioIntegration {
+  id: string;
+  employee_id: string;
+  account_sid: string;
+  auth_token: string;
+  phone_number: string;
+  twiml_app_sid?: string;
+  api_key_sid?: string;
+  api_secret?: string;
+  voice_region?: string;
+  recording_enabled: boolean;
+  status: 'Connected' | 'Not Connected' | 'Invalid Credentials';
+  updated_at: string;
+}
+
+export interface CallLog {
+  id: string;
+  call_sid?: string;
+  client_id?: string;
+  employee_id: string;
+  contact_name?: string;
+  company_name?: string;
+  phone_number: string;
+  direction: 'inbound' | 'outbound';
+  duration: number;
+  status: 'completed' | 'busy' | 'no-answer' | 'failed' | 'canceled' | 'missed' | 'in-progress';
+  outcome?: string;
+  notes?: string;
+  recording_url?: string;
+  recording_duration?: number;
+  followup_required?: boolean;
+  followup_date?: string;
+  tags?: string[];
+  created_at: string;
+}
+
 export interface MockSchema {
   profiles: Profile[];
   clients: Client[];
@@ -132,6 +168,8 @@ export interface MockSchema {
   activities: Activity[];
   email_logs: EmailLog[];
   calendar_integrations: CalendarIntegration[];
+  twilio_integrations: TwilioIntegration[];
+  call_logs: CallLog[];
 }
 
 const DEFAULT_DB: MockSchema = {
@@ -312,7 +350,49 @@ const DEFAULT_DB: MockSchema = {
       sent_at: new Date('2026-07-24T12:05:00Z').toISOString()
     }
   ],
-  calendar_integrations: []
+  calendar_integrations: [],
+  twilio_integrations: [],
+  call_logs: [
+    {
+      id: 'call_1',
+      call_sid: 'CA_sample_1234567890',
+      client_id: 'cli_1',
+      employee_id: 'usr_emp_1',
+      contact_name: 'Aditya Sen',
+      company_name: 'Stripe India',
+      phone_number: '+919876543210',
+      direction: 'outbound',
+      duration: 185,
+      status: 'completed',
+      outcome: 'Connected - Interested',
+      notes: 'Discussed QEVN CRM enterprise features. Requested follow-up call on Friday with engineering team.',
+      recording_url: 'https://api.twilio.com/2010-04-01/Accounts/ACmock/Recordings/REmock1.mp3',
+      recording_duration: 180,
+      followup_required: true,
+      followup_date: '2026-08-08',
+      tags: ['Product Demo', 'Decision Maker'],
+      created_at: new Date('2026-08-01T14:30:00Z').toISOString()
+    },
+    {
+      id: 'call_2',
+      call_sid: 'CA_sample_0987654321',
+      client_id: 'cli_2',
+      employee_id: 'usr_emp_1',
+      contact_name: 'Rajesh Sharma',
+      company_name: 'Flipkart',
+      phone_number: '+919876543211',
+      direction: 'inbound',
+      duration: 92,
+      status: 'completed',
+      outcome: 'Call Back Later',
+      notes: 'Customer inquired about custom API webhooks for lead synchronization.',
+      recording_url: 'https://api.twilio.com/2010-04-01/Accounts/ACmock/Recordings/REmock2.mp3',
+      recording_duration: 90,
+      followup_required: false,
+      tags: ['Inbound Support'],
+      created_at: new Date('2026-08-02T11:15:00Z').toISOString()
+    }
+  ]
 };
 
 // Safe Read DB Function

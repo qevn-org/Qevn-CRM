@@ -10,6 +10,7 @@ import {
   Users,
   KanbanSquare,
   Calendar,
+  PhoneCall,
   Settings,
   LogOut,
   Sun,
@@ -49,6 +50,7 @@ export const Sidebar: React.FC = () => {
     { name: 'Clients', href: '/employee/clients', icon: Users },
     { name: 'Pipeline', href: '/employee/pipeline', icon: KanbanSquare },
     { name: 'Meetings', href: '/employee/meetings', icon: Calendar },
+    { name: 'Call History', href: '/employee/calls', icon: PhoneCall },
     { name: 'Settings', href: '/employee/settings', icon: Settings },
   ];
 

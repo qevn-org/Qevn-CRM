@@ -119,6 +119,45 @@ create table if not exists public.calendar_integrations (
   unique (employee_id, provider)
 );
 
+-- TWILIO INTEGRATION TABLE
+create table if not exists public.twilio_integrations (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.profiles(id) on delete cascade,
+  account_sid text not null,
+  auth_token text not null,
+  phone_number text not null,
+  twiml_app_sid text,
+  api_key_sid text,
+  api_secret text,
+  voice_region text default 'us1',
+  recording_enabled boolean not null default true,
+  status text check (status in ('Connected', 'Not Connected', 'Invalid Credentials')) default 'Connected',
+  updated_at timestamptz not null default now(),
+  unique (employee_id)
+);
+
+-- CALL LOGS TABLE
+create table if not exists public.call_logs (
+  id uuid primary key default gen_random_uuid(),
+  call_sid text,
+  client_id uuid references public.clients(id) on delete set null,
+  employee_id uuid not null references public.profiles(id) on delete cascade,
+  contact_name text,
+  company_name text,
+  phone_number text not null,
+  direction text not null check (direction in ('inbound', 'outbound')),
+  duration integer not null default 0,
+  status text not null check (status in ('completed', 'busy', 'no-answer', 'failed', 'canceled', 'missed', 'in-progress')),
+  outcome text,
+  notes text,
+  recording_url text,
+  recording_duration integer,
+  followup_required boolean default false,
+  followup_date date,
+  tags text[],
+  created_at timestamptz not null default now()
+);
+
 -- Trigger to sync new user signups from auth.users to public.profiles
 create or replace function public.handle_new_user()
 returns trigger as $$

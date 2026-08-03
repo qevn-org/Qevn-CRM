@@ -18,6 +18,7 @@ import {
   Trash2, Download
 } from 'lucide-react';
 import Link from 'next/link';
+import { ClickToCall } from '@/components/ui/click-to-call';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface ClientDetailPageProps {
@@ -437,7 +438,18 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
                   <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   <div>
                     <p className="text-xs text-muted-foreground uppercase">Phone Number</p>
-                    <p className="font-medium">{client.phone || '—'}</p>
+                    {client.phone ? (
+                      <ClickToCall
+                        phone={client.phone}
+                        name={client.client_name}
+                        company={client.company_name}
+                        email={client.email}
+                        clientId={client.id}
+                        variant="link"
+                      />
+                    ) : (
+                      <p className="font-medium">—</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
