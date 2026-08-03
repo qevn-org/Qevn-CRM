@@ -71,6 +71,14 @@ function ClientsContent() {
     fetchClients();
   }, [user]);
 
+  // Set initial status filter if query param contains status
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam) {
+      setStatusFilter(statusParam);
+    }
+  }, [searchParams]);
+
   // Open "Add Client" dialog if query params has add=true
   useEffect(() => {
     if (searchParams.get('add') === 'true') {

@@ -71,14 +71,14 @@ export default function EmployeeDashboard() {
     : 0;
 
   const stats = [
-    { name: "Today's Meetings", value: todayMeetings.length, icon: Calendar, color: 'text-purple-400' },
-    { name: 'Upcoming Meetings', value: upcomingMeetings.length, icon: Calendar, color: 'text-blue-400' },
-    { name: 'Pending Feedback', value: pendingFeedback.length, icon: AlertCircle, color: 'text-amber-400' },
-    { name: 'Pending Follow-ups', value: pendingFollowups.length, icon: AlertCircle, color: 'text-rose-400' },
-    { name: 'Clients Added', value: clients.length, icon: Users, color: 'text-teal-400' },
-    { name: 'Deals Won', value: dealsWon, icon: Award, color: 'text-emerald-400' },
-    { name: 'Deals Lost', value: dealsLost, icon: XCircle, color: 'text-rose-500' },
-    { name: 'Conversion Rate', value: `${conversionRate}%`, icon: TrendingUp, color: 'text-indigo-400' },
+    { name: "Today's Meetings", value: todayMeetings.length, icon: Calendar, color: 'text-purple-400', href: '/employee/meetings' },
+    { name: 'Upcoming Meetings', value: upcomingMeetings.length, icon: Calendar, color: 'text-blue-400', href: '/employee/meetings' },
+    { name: 'Pending Feedback', value: pendingFeedback.length, icon: AlertCircle, color: 'text-amber-400', href: '/employee/clients?status=Feedback Pending' },
+    { name: 'Pending Follow-ups', value: pendingFollowups.length, icon: AlertCircle, color: 'text-rose-400', href: '/employee/clients?status=Follow-up Pending' },
+    { name: 'Clients Added', value: clients.length, icon: Users, color: 'text-teal-400', href: '/employee/clients' },
+    { name: 'Deals Won', value: dealsWon, icon: Award, color: 'text-emerald-400', href: '/employee/clients?status=Won' },
+    { name: 'Deals Lost', value: dealsLost, icon: XCircle, color: 'text-rose-500', href: '/employee/clients?status=Lost' },
+    { name: 'Conversion Rate', value: `${conversionRate}%`, icon: TrendingUp, color: 'text-indigo-400', href: '/employee/pipeline' },
   ];
 
   return (
@@ -92,17 +92,19 @@ export default function EmployeeDashboard() {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, i) => (
-          <Card key={i} className="hover:border-primary/30 transition-all duration-200">
-            <CardContent className="p-6 flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{stat.name}</p>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-              </div>
-              <div className={`p-3 rounded-lg bg-secondary/50 ${stat.color}`}>
-                <stat.icon className="h-6 w-6" />
-              </div>
-            </CardContent>
-          </Card>
+          <Link key={i} href={stat.href} className="block group">
+            <Card className="hover:border-primary/50 hover:bg-secondary/20 hover:scale-[1.02] hover:shadow-lg transition-all duration-200 cursor-pointer">
+              <CardContent className="p-6 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider group-hover:text-primary transition-colors">{stat.name}</p>
+                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                </div>
+                <div className={`p-3 rounded-lg bg-secondary/50 ${stat.color} group-hover:bg-primary/20 transition-colors`}>
+                  <stat.icon className="h-6 w-6" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
