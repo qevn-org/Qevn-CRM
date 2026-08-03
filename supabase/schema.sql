@@ -54,6 +54,7 @@ create table if not exists public.meetings (
   timezone text not null default 'UTC',
   calendar_event_id text,
   meeting_notes text,
+  attendees text,
   feedback_sent boolean not null default false,
   followup_sent boolean not null default false,
   feedback_reminder_sent boolean not null default false,

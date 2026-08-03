@@ -150,7 +150,7 @@ export const db = {
     if (useSupabase(userId) && supabase) {
       let query = supabase
         .from('clients')
-        .select('*')
+        .select('*, profiles:employee_id(name)')
         .eq('archived', showArchived);
       
       if (role !== 'admin') {
@@ -158,14 +158,21 @@ export const db = {
       }
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) return [];
-      return data || [];
+      return (data || []).map(c => ({
+        ...c,
+        owner_name: (c.profiles as any)?.name || 'Unknown'
+      }));
     } else {
       const mockDb = getMockDB();
       let clients = mockDb.clients.filter(c => c.archived === showArchived);
       if (role !== 'admin') {
         clients = clients.filter(c => c.employee_id === userId);
       }
-      return clients;
+      const profilesMap = new Map(mockDb.profiles.map(p => [p.id, p.name]));
+      return clients.map(c => ({
+        ...c,
+        owner_name: c.employee_id ? (profilesMap.get(c.employee_id) || 'Unknown') : 'Unknown'
+      }));
     }
   },
 
@@ -173,14 +180,23 @@ export const db = {
     if (useSupabase(clientId) && supabase) {
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select('*, profiles:employee_id(name)')
         .eq('id', clientId)
         .single();
       if (error) return null;
-      return data;
+      return {
+        ...data,
+        owner_name: (data.profiles as any)?.name || 'Unknown'
+      };
     } else {
       const mockDb = getMockDB();
-      return mockDb.clients.find(c => c.id === clientId) || null;
+      const client = mockDb.clients.find(c => c.id === clientId);
+      if (!client) return null;
+      const profile = client.employee_id ? mockDb.profiles.find(p => p.id === client.employee_id) : null;
+      return {
+        ...client,
+        owner_name: profile?.name || 'Unknown'
+      };
     }
   },
 

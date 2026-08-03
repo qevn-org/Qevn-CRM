@@ -18,6 +18,7 @@ import {
   Trash2, Download
 } from 'lucide-react';
 import Link from 'next/link';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface ClientDetailPageProps {
   params: Promise<{ id: string }>;
@@ -179,11 +180,48 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
     if (!fileToUpload) return;
 
     try {
+      let fileUrl = '#';
+      const bucketName = 'client-documents';
+
+      // 1. Upload to Supabase Storage if configured
+      if (isSupabaseConfigured() && supabase) {
+        const fileExt = fileToUpload.name.split('.').pop();
+        const filePath = `${clientId}/${Date.now()}_${fileToUpload.name}`;
+
+        // Attempt upload
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from(bucketName)
+          .upload(filePath, fileToUpload, { cacheControl: '3600', upsert: true });
+
+        if (uploadError) {
+          console.log('[STORAGE] Upload failed, trying to create bucket client-documents...', uploadError.message);
+          // Try to create the bucket if it is missing
+          await supabase.storage.createBucket(bucketName, { public: true });
+          
+          // Retry upload
+          const { data: retryData, error: retryError } = await supabase.storage
+            .from(bucketName)
+            .upload(filePath, fileToUpload, { cacheControl: '3600', upsert: true });
+
+          if (retryError) {
+            throw new Error(`Failed to upload to storage: ${retryError.message}`);
+          }
+        }
+
+        // Retrieve public URL
+        const { data: urlData } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(filePath);
+
+        fileUrl = urlData.publicUrl;
+      }
+
+      // 2. Log document entry in DB
       const created = await db.createDocument({
         client_id: clientId,
         employee_id: user!.id,
         file_name: fileToUpload.name,
-        file_url: '#', // In real Supabase, upload to storage and store URL
+        file_url: fileUrl,
         file_size: fileToUpload.size,
         file_type: fileToUpload.type
       });
@@ -200,8 +238,9 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
         });
         fetchData();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(err.message || 'Error uploading file', 'error');
     }
   };
 
@@ -446,6 +485,12 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
                     <p className="font-semibold text-foreground mt-0.5">{client.lead_source || 'Unknown'}</p>
                   </div>
                 </div>
+                {client.owner_name && (
+                  <div className="pt-2 border-t border-border/20">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Lead Owner</span>
+                    <p className="font-semibold text-primary/95 mt-0.5">{client.owner_name}</p>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -664,9 +709,17 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleDownloadMock(doc.file_name)}>
-                              <Download className="h-4 w-4" />
-                            </Button>
+                            {doc.file_url && doc.file_url !== '#' ? (
+                              <a href={doc.file_url} target="_blank" rel="noopener noreferrer" download>
+                                <Button variant="ghost" size="sm">
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </a>
+                            ) : (
+                              <Button variant="ghost" size="sm" onClick={() => handleDownloadMock(doc.file_name)}>
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button variant="ghost" size="sm" onClick={() => handleDeleteDocument(doc.id, doc.file_name)}>
                               <Trash2 className="h-4 w-4 text-red-400" />
                             </Button>

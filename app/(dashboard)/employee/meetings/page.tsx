@@ -88,6 +88,7 @@ function MeetingsContent() {
       meeting_end: meetingEnd,
       timezone: timezone,
       meeting_notes: meetingNotes,
+      attendees: attendees,
     };
 
     try {
@@ -99,11 +100,14 @@ function MeetingsContent() {
 
       if (newMeet) {
         // 2. Call calendar service to sync (OAuth triggers or mock)
-        const calendarEventId = await calendarService.syncMeetingToCalendar(newMeet, user!.id);
+        const syncResult = await calendarService.syncMeetingToCalendar(newMeet, user!.id);
         
-        // 3. Update meeting with returned event id
-        if (calendarEventId) {
-          await db.updateMeeting(newMeet.id, { calendar_event_id: calendarEventId });
+        // 3. Update meeting with returned event id and generated Meet link
+        if (syncResult && syncResult.calendarEventId) {
+          await db.updateMeeting(newMeet.id, { 
+            calendar_event_id: syncResult.calendarEventId,
+            meeting_link: syncResult.meetingLink || newMeet.meeting_link
+          });
         }
 
         showToast('Meeting scheduled successfully!', 'success');

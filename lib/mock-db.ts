@@ -46,6 +46,7 @@ export interface Client {
   notes?: string;
   archived: boolean;
   created_at: string;
+  owner_name?: string;
 }
 
 export interface Meeting {
@@ -60,6 +61,7 @@ export interface Meeting {
   timezone: string;
   calendar_event_id?: string;
   meeting_notes?: string;
+  attendees?: string;
   feedback_sent: boolean;
   followup_sent: boolean;
   feedback_reminder_sent: boolean;

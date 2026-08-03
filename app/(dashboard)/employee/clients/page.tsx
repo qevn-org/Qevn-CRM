@@ -33,6 +33,7 @@ function ClientsContent() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
   const [industryFilter, setIndustryFilter] = useState('All');
+  const [ownerFilter, setOwnerFilter] = useState('All');
 
   // Dialog States
   const [modalOpen, setModalOpen] = useState(false);
@@ -238,6 +239,7 @@ function ClientsContent() {
   };
 
   const uniqueIndustries = Array.from(new Set(clients.map(c => c.industry).filter(Boolean)));
+  const uniqueOwners = Array.from(new Set(clients.map(c => c.owner_name).filter(Boolean))) as string[];
 
   const filteredClients = clients.filter(c => {
     const text = `${c.client_name} ${c.company_name} ${c.email || ''} ${c.industry || ''} ${c.country || ''}`.toLowerCase();
@@ -246,8 +248,9 @@ function ClientsContent() {
     const matchesStatus = statusFilter === 'All' || c.status === statusFilter;
     const matchesPriority = priorityFilter === 'All' || c.priority === priorityFilter;
     const matchesIndustry = industryFilter === 'All' || c.industry === industryFilter;
+    const matchesOwner = ownerFilter === 'All' || c.owner_name === ownerFilter;
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesIndustry;
+    return matchesSearch && matchesStatus && matchesPriority && matchesIndustry && matchesOwner;
   });
 
   const getPriorityColor = (p: string) => {
@@ -294,7 +297,18 @@ function ClientsContent() {
               className="pl-9"
             />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full md:w-auto">
+          <div className={`grid grid-cols-2 gap-2 w-full md:w-auto ${user?.role === 'admin' ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+            {user?.role === 'admin' && (
+              <Select
+                options={[
+                  { value: 'All', label: 'All Owners' },
+                  ...uniqueOwners.map(owner => ({ value: owner, label: owner }))
+                ]}
+                value={ownerFilter}
+                onChange={(e) => setOwnerFilter(e.target.value)}
+                className="h-10 text-xs py-1"
+              />
+            )}
             <Select
               options={[
                 { value: 'All', label: 'All Statuses' },
@@ -322,7 +336,7 @@ function ClientsContent() {
               ]}
               value={industryFilter}
               onChange={(e) => setIndustryFilter(e.target.value)}
-              className="h-10 text-xs py-1 col-span-2 sm:col-span-1"
+              className={`h-10 text-xs py-1 ${user?.role === 'admin' ? '' : 'col-span-2 sm:col-span-1'}`}
             />
           </div>
         </CardContent>
@@ -349,6 +363,7 @@ function ClientsContent() {
                 <TableRow>
                   <TableHead>Client Details</TableHead>
                   <TableHead>Company</TableHead>
+                  {user?.role === 'admin' && <TableHead>Lead Owner</TableHead>}
                   <TableHead>Industry</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Priority</TableHead>
@@ -380,6 +395,11 @@ function ClientsContent() {
                         <span className="text-[10px] text-muted-foreground block">{client.city ? `${client.city}, ` : ''}{client.country}</span>
                       )}
                     </TableCell>
+                    {user?.role === 'admin' && (
+                      <TableCell>
+                        <span className="text-xs font-semibold text-primary/95">{client.owner_name || 'Unknown'}</span>
+                      </TableCell>
+                    )}
                     <TableCell>
                       <span className="text-xs text-muted-foreground">{client.industry || '—'}</span>
                     </TableCell>

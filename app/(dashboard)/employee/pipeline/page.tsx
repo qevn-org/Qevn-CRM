@@ -186,6 +186,14 @@ export default function KanbanPipeline() {
                         )}
                         <span>{new Date(client.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                       </div>
+
+                      {/* Lead Owner tag for Admins */}
+                      {user?.role === 'admin' && client.owner_name && (
+                        <div className="flex items-center justify-between pt-2 border-t border-border/10 text-[10px]">
+                          <span className="text-muted-foreground">Owner</span>
+                          <span className="font-semibold text-primary/95">{client.owner_name}</span>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}

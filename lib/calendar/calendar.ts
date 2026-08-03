@@ -77,34 +77,51 @@ async function getValidToken(employeeId: string, provider: 'google'): Promise<st
 // MAIN SYNC SERVICE
 // -------------------------------------------------------------------------
 export const calendarService = {
-  async syncMeetingToCalendar(meeting: Meeting, employeeId: string): Promise<string | null> {
+  async syncMeetingToCalendar(meeting: Meeting, employeeId: string): Promise<{ calendarEventId: string; meetingLink?: string } | null> {
     const integrations = await db.getCalendarIntegrations(employeeId);
     // Find Google integration
     const integration = integrations.find(i => i.provider === 'google');
     if (!integration) {
       console.log(`[CALENDAR SYNC] No Google Calendar integration found for employee: ${employeeId}. Mocking event.`);
-      return `mock_${meeting.id}_gcal`;
+      return { calendarEventId: `mock_${meeting.id}_gcal` };
     }
 
     const token = await getValidToken(employeeId, 'google');
-    if (!token) return `mock_${meeting.id}_gcal`;
+    if (!token) return { calendarEventId: `mock_${meeting.id}_gcal` };
 
     const eventStart = `${meeting.meeting_date}T${meeting.meeting_start}:00`;
     const eventEnd = `${meeting.meeting_date}T${meeting.meeting_end}:00`;
 
     try {
+      // Parse guest emails from attendees list
+      const attendeesList = meeting.attendees
+        ? meeting.attendees.split(',').map(email => ({ email: email.trim() })).filter(e => e.email.length > 0)
+        : [];
+
       // Google Calendar API Sync
-      const eventPayload: CalendarEventPayload = {
+      const eventPayload: any = {
         summary: meeting.meeting_title,
         description: meeting.meeting_notes || 'Scheduled via QEVN CRM',
         start: { dateTime: eventStart, timeZone: meeting.timezone },
         end: { dateTime: eventEnd, timeZone: meeting.timezone },
+        attendees: attendeesList,
+        conferenceData: {
+          createRequest: {
+            requestId: `meet-${meeting.id}-${Date.now()}`,
+            conferenceSolutionKey: {
+              type: 'hangoutsMeet'
+            }
+          }
+        }
       };
+
       if (meeting.meeting_link) {
         eventPayload.location = meeting.meeting_link;
       }
 
-      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      // Add conferenceDataVersion=1 to enable Google Meet generation
+      // Add sendUpdates=all to automatically send calendar invite notifications to all guests
+      const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -116,7 +133,10 @@ export const calendarService = {
       if (res.ok) {
         const data = await res.json();
         console.log('[CALENDAR SYNC] Successfully synced to Google Calendar:', data.id);
-        return data.id;
+        
+        // Extract the generated Google Meet link
+        const meetingLink = data.hangoutLink || (data.conferenceData?.entryPoints?.[0]?.uri) || undefined;
+        return { calendarEventId: data.id, meetingLink };
       } else {
         console.error('[CALENDAR SYNC] Google Calendar API error:', await res.text());
       }
@@ -124,7 +144,7 @@ export const calendarService = {
       console.error('[CALENDAR SYNC] Failed syncing event to Google:', err);
     }
 
-    return `mock_${meeting.id}_gcal`;
+    return { calendarEventId: `mock_${meeting.id}_gcal` };
   },
 
   async updateMeetingInCalendar(meeting: Meeting, employeeId: string): Promise<boolean> {
@@ -140,7 +160,11 @@ export const calendarService = {
     const eventEnd = `${meeting.meeting_date}T${meeting.meeting_end}:00`;
 
     try {
-      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${meeting.calendar_event_id}`, {
+      const attendeesList = meeting.attendees
+        ? meeting.attendees.split(',').map(email => ({ email: email.trim() })).filter(e => e.email.length > 0)
+        : [];
+
+      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${meeting.calendar_event_id}?sendUpdates=all`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -151,7 +175,8 @@ export const calendarService = {
           description: meeting.meeting_notes,
           start: { dateTime: eventStart, timeZone: meeting.timezone },
           end: { dateTime: eventEnd, timeZone: meeting.timezone },
-          location: meeting.meeting_link
+          location: meeting.meeting_link,
+          attendees: attendeesList
         }),
       });
       if (res.ok) return true;
@@ -171,7 +196,7 @@ export const calendarService = {
     if (!token) return false;
 
     try {
-      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${meeting.calendar_event_id}`, {
+      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${meeting.calendar_event_id}?sendUpdates=all`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

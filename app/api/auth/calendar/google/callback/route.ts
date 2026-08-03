@@ -63,8 +63,9 @@ export async function GET(request: NextRequest) {
 
   // Real OAuth Exchange
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const redirectUri = `${appUrl}/api/auth/calendar/google/callback`;
+    const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || 'localhost:3000';
+    const proto = request.headers.get('x-forwarded-proto') || 'http';
+    const redirectUri = `${proto}://${host}/api/auth/calendar/google/callback`;
 
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
