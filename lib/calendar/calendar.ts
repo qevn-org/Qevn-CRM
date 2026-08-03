@@ -13,6 +13,7 @@ interface CalendarEventPayload {
 // REFRESH GOOGLE TOKEN
 // -------------------------------------------------------------------------
 async function refreshGoogleToken(refreshToken: string): Promise<{ access_token: string; expires_in: number } | null> {
+  console.log('[CALENDAR OAUTH] Initiating Google token refresh with refresh_token...');
   try {
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -26,12 +27,16 @@ async function refreshGoogleToken(refreshToken: string): Promise<{ access_token:
     });
 
     if (!response.ok) {
-      throw new Error(`Token refresh failed: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`[CALENDAR OAUTH ERROR] Token refresh failed with status ${response.status}:`, errorText);
+      return null;
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log('[CALENDAR OAUTH] Token refreshed successfully! New expires_in:', data.expires_in);
+    return data;
   } catch (error) {
-    console.error('[CALENDAR ERROR] Refreshing Google token failed:', error);
+    console.error('[CALENDAR OAUTH ERROR] Exception during Google token refresh:', error);
     return null;
   }
 }
@@ -40,22 +45,32 @@ async function refreshGoogleToken(refreshToken: string): Promise<{ access_token:
 // GET VALID ACCESS TOKEN
 // -------------------------------------------------------------------------
 async function getValidToken(employeeId: string, provider: 'google'): Promise<string | null> {
+  console.log(`[CALENDAR OAUTH] Looking up ${provider} calendar integration for employeeId: ${employeeId}`);
   const integrations = await db.getCalendarIntegrations(employeeId);
   const integration = integrations.find(c => c.provider === provider);
-  if (!integration) return null;
+
+  if (!integration) {
+    console.warn(`[CALENDAR OAUTH WARN] No ${provider} calendar integration found in DB for employeeId: ${employeeId}`);
+    return null;
+  }
 
   const now = new Date();
   const expiresAt = new Date(integration.expires_at);
+  console.log(`[CALENDAR OAUTH] Found token. Expires at: ${expiresAt.toISOString()} (Current time: ${now.toISOString()})`);
 
   // If token is still valid (with 5-minute buffer)
   if (expiresAt.getTime() - now.getTime() > 5 * 60 * 1000) {
+    console.log('[CALENDAR OAUTH] Access token is active and valid.');
     return integration.access_token;
   }
 
   // Token expired - refresh it
-  if (!integration.refresh_token) return null;
+  if (!integration.refresh_token) {
+    console.warn('[CALENDAR OAUTH WARN] Access token expired and no refresh_token available.');
+    return null;
+  }
 
-  console.log(`[CALENDAR] Token expired for ${provider}, refreshing...`);
+  console.log(`[CALENDAR OAUTH] Token expired for ${provider}, refreshing now...`);
   const refreshData = await refreshGoogleToken(integration.refresh_token);
 
   if (refreshData) {
@@ -64,9 +79,10 @@ async function getValidToken(employeeId: string, provider: 'google'): Promise<st
       employee_id: employeeId,
       provider,
       access_token: refreshData.access_token,
-      refresh_token: integration.refresh_token, // retain old refresh token
+      refresh_token: integration.refresh_token,
       expires_at: newExpiresAt
     });
+    console.log('[CALENDAR OAUTH] Saved updated access token to DB.');
     return refreshData.access_token;
   }
 
@@ -96,7 +112,6 @@ export function generateMeetingLink(platform: string = 'Google Meet'): string {
 }
 
 export function formatDateTimeICS(dateStr: string, timeStr: string): string {
-  // dateStr: "YYYY-MM-DD", timeStr: "HH:mm"
   const cleanDate = dateStr.replace(/-/g, '');
   const cleanTime = timeStr.replace(/:/g, '') + '00';
   return `${cleanDate}T${cleanTime}`;
@@ -180,12 +195,18 @@ export function generateOutlookCalendarAddUrl(meeting: Meeting): string {
 // MAIN SYNC SERVICE
 // -------------------------------------------------------------------------
 export const calendarService = {
-  async syncMeetingToCalendar(meeting: Meeting, employeeId: string): Promise<{ calendarEventId?: string; meetingLink?: string; need_reconnect?: boolean; error?: string }> {
+  async syncMeetingToCalendar(
+    meeting: Meeting, 
+    employeeId: string
+  ): Promise<{ calendarEventId?: string; meetingLink?: string; conferenceData?: any; need_reconnect?: boolean; error?: string }> {
+    console.log(`[GOOGLE CALENDAR SYNC] Starting Google Calendar sync for meeting: "${meeting.meeting_title}" (${meeting.id})`);
+
     const integrations = await db.getCalendarIntegrations(employeeId);
     const integration = integrations.find(i => i.provider === 'google');
     
     // Check if Google integration exists
     if (!integration) {
+      console.warn(`[GOOGLE CALENDAR SYNC WARN] No Google Calendar integration found for employeeId: ${employeeId}`);
       if ((meeting.platform || 'Google Meet') === 'Google Meet') {
         return { 
           need_reconnect: true, 
@@ -200,6 +221,7 @@ export const calendarService = {
 
     const token = await getValidToken(employeeId, 'google');
     if (!token) {
+      console.warn(`[GOOGLE CALENDAR SYNC WARN] Invalid or expired Google OAuth token for employeeId: ${employeeId}`);
       if ((meeting.platform || 'Google Meet') === 'Google Meet') {
         return { 
           need_reconnect: true, 
@@ -220,11 +242,12 @@ export const calendarService = {
         ? meeting.attendees.split(',').map(email => ({ email: email.trim() })).filter(e => e.email.length > 0)
         : [];
 
+      // Google Calendar API Event Payload with conferenceData.createRequest
       const eventPayload: any = {
         summary: meeting.meeting_title,
         description: meeting.meeting_notes || 'Scheduled via QEVN CRM',
-        start: { dateTime: eventStart, timeZone: meeting.timezone || 'UTC' },
-        end: { dateTime: eventEnd, timeZone: meeting.timezone || 'UTC' },
+        start: { dateTime: eventStart, timeZone: meeting.timezone || 'Asia/Kolkata' },
+        end: { dateTime: eventEnd, timeZone: meeting.timezone || 'Asia/Kolkata' },
         attendees: attendeesList,
         conferenceData: {
           createRequest: {
@@ -240,6 +263,9 @@ export const calendarService = {
         eventPayload.location = meeting.meeting_link;
       }
 
+      console.log('[GOOGLE CALENDAR API REQUEST] POST https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all');
+      console.log('[GOOGLE CALENDAR API PAYLOAD]', JSON.stringify(eventPayload, null, 2));
+
       const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all', {
         method: 'POST',
         headers: {
@@ -249,36 +275,53 @@ export const calendarService = {
         body: JSON.stringify(eventPayload),
       });
 
+      console.log(`[GOOGLE CALENDAR API RESPONSE STATUS] ${res.status} ${res.statusText}`);
+
       if (res.ok) {
         const data = await res.json();
-        console.log('[CALENDAR SYNC] Successfully created Google Calendar event with Meet link:', data.id, data.hangoutLink);
+        console.log('[GOOGLE CALENDAR API SUCCESS] Response Body:', JSON.stringify(data, null, 2));
+        
+        // Extract real Google Meet URL returned by Google's API
         const meetingLink = data.hangoutLink || (data.conferenceData?.entryPoints?.[0]?.uri) || meeting.meeting_link;
-        return { calendarEventId: data.id, meetingLink };
+        console.log(`[GOOGLE CALENDAR API] Real Google Meet Link: ${meetingLink} | Event ID: ${data.id}`);
+
+        return { 
+          calendarEventId: data.id, 
+          meetingLink: meetingLink,
+          conferenceData: data.conferenceData 
+        };
       } else {
         const errorText = await res.text();
-        console.error('[CALENDAR SYNC] Google Calendar API error:', errorText);
+        console.error('[GOOGLE CALENDAR API ERROR] API returned error response:', errorText);
+
         if (res.status === 401 || res.status === 403) {
-          return { need_reconnect: true, error: 'Google Calendar authentication failed. Please reconnect your Google account.' };
+          return { 
+            need_reconnect: true, 
+            error: `Google Calendar API authentication failed (${res.status}). Please reconnect your Google account.` 
+          };
         }
+        return {
+          error: `Google Calendar API returned error (${res.status}): ${errorText}`
+        };
       }
     } catch (err: any) {
-      console.error('[CALENDAR SYNC] Failed syncing event to Google:', err);
+      console.error('[GOOGLE CALENDAR API EXCEPTION] Exception during Google Calendar sync:', err);
+      return { error: err.message || 'Exception during Google Calendar API call' };
     }
-
-    return { 
-      calendarEventId: `mock_${meeting.id}_gcal`, 
-      meetingLink: meeting.meeting_link || generateMeetingLink(meeting.platform) 
-    };
   },
 
   async updateMeetingInCalendar(meeting: Meeting, employeeId: string): Promise<boolean> {
+    console.log(`[GOOGLE CALENDAR UPDATE] Updating Google Calendar event: ${meeting.calendar_event_id}`);
     if (!meeting.calendar_event_id || meeting.calendar_event_id.startsWith('mock_')) {
-      console.log(`[CALENDAR UPDATE] Mock calendar update for event: ${meeting.calendar_event_id}`);
+      console.log(`[GOOGLE CALENDAR UPDATE] Event is mock or missing, skipping API update.`);
       return true;
     }
 
     const token = await getValidToken(employeeId, 'google');
-    if (!token) return false;
+    if (!token) {
+      console.warn('[GOOGLE CALENDAR UPDATE WARN] Missing token, skipping API update.');
+      return false;
+    }
 
     const eventStart = `${meeting.meeting_date}T${meeting.meeting_start}:00`;
     const eventEnd = `${meeting.meeting_date}T${meeting.meeting_end}:00`;
@@ -296,28 +339,39 @@ export const calendarService = {
         },
         body: JSON.stringify({
           summary: meeting.meeting_title,
-          description: meeting.meeting_notes,
-          start: { dateTime: eventStart, timeZone: meeting.timezone },
-          end: { dateTime: eventEnd, timeZone: meeting.timezone },
+          description: meeting.meeting_notes || 'Scheduled via QEVN CRM',
+          start: { dateTime: eventStart, timeZone: meeting.timezone || 'Asia/Kolkata' },
+          end: { dateTime: eventEnd, timeZone: meeting.timezone || 'Asia/Kolkata' },
           location: meeting.meeting_link,
           attendees: attendeesList
         }),
       });
-      if (res.ok) return true;
+
+      console.log(`[GOOGLE CALENDAR UPDATE RESPONSE] ${res.status} ${res.statusText}`);
+      if (res.ok) {
+        console.log('[GOOGLE CALENDAR UPDATE SUCCESS] Event updated in Google Calendar.');
+        return true;
+      } else {
+        console.error('[GOOGLE CALENDAR UPDATE ERROR]', await res.text());
+      }
     } catch (err) {
-      console.error('[CALENDAR UPDATE] Error updating event:', err);
+      console.error('[GOOGLE CALENDAR UPDATE EXCEPTION] Error updating event:', err);
     }
     return false;
   },
 
   async deleteMeetingFromCalendar(meeting: Meeting, employeeId: string): Promise<boolean> {
+    console.log(`[GOOGLE CALENDAR DELETE] Deleting Google Calendar event: ${meeting.calendar_event_id}`);
     if (!meeting.calendar_event_id || meeting.calendar_event_id.startsWith('mock_')) {
-      console.log(`[CALENDAR DELETE] Mock calendar delete for event: ${meeting.calendar_event_id}`);
+      console.log(`[GOOGLE CALENDAR DELETE] Event is mock or missing, skipping API delete.`);
       return true;
     }
 
     const token = await getValidToken(employeeId, 'google');
-    if (!token) return false;
+    if (!token) {
+      console.warn('[GOOGLE CALENDAR DELETE WARN] Missing token, skipping API delete.');
+      return false;
+    }
 
     try {
       const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${meeting.calendar_event_id}?sendUpdates=all`, {
@@ -326,9 +380,15 @@ export const calendarService = {
           'Authorization': `Bearer ${token}`,
         }
       });
-      if (res.ok) return true;
+      console.log(`[GOOGLE CALENDAR DELETE RESPONSE] ${res.status} ${res.statusText}`);
+      if (res.ok) {
+        console.log('[GOOGLE CALENDAR DELETE SUCCESS] Event deleted from Google Calendar.');
+        return true;
+      } else {
+        console.error('[GOOGLE CALENDAR DELETE ERROR]', await res.text());
+      }
     } catch (err) {
-      console.error('[CALENDAR DELETE] Error deleting event:', err);
+      console.error('[GOOGLE CALENDAR DELETE EXCEPTION] Error deleting event:', err);
     }
     return false;
   }
