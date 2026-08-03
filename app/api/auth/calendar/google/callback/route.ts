@@ -63,10 +63,10 @@ export async function GET(request: NextRequest) {
 
   // Real OAuth Exchange
   try {
-    const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || 'localhost:3000';
-    // Force HTTPS protocol on production domains to guarantee redirect_uri match
-    const proto = host.includes('localhost') ? 'http' : 'https';
-    const redirectUri = `${proto}://${host}/api/auth/calendar/google/callback`;
+    // Use the exact same redirect_uri that was sent in the initial auth request.
+    // This MUST match what is registered in Google Cloud Console exactly.
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/calendar/google/callback';
+    console.log('[OAUTH CALLBACK] Exchanging code with redirect_uri:', redirectUri);
 
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
