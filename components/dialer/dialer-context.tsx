@@ -114,13 +114,26 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
   };
 
   const startCall = async (num?: string, contact?: ActiveContact) => {
-    const targetNum = (num || phoneNumber).trim();
+    let targetNum = (num || phoneNumber).trim();
     if (!targetNum) {
       showToast('Please enter a valid phone number', 'warning');
       return;
     }
 
+    // Auto-format 10-digit number to E.164 (+91 for India if starts with 6,7,8,9)
+    let cleanDigits = targetNum.replace(/[^\d+]/g, '');
+    if (!cleanDigits.startsWith('+')) {
+      if (cleanDigits.length === 10 && /^[6789]/.test(cleanDigits)) {
+        cleanDigits = `+91${cleanDigits}`;
+      } else if (cleanDigits.length === 10) {
+        cleanDigits = `+1${cleanDigits}`;
+      } else {
+        cleanDigits = `+${cleanDigits}`;
+      }
+    }
+    targetNum = cleanDigits;
     setPhoneNumber(targetNum);
+
     if (contact) setActiveContact(contact);
 
     // Look up contact if not provided
@@ -144,15 +157,40 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
     setIsOnHold(false);
     setDtmfString('');
 
-    // Simulate WebRTC Twilio Voice Connection workflow
-    setTimeout(() => {
-      setCallState('ringing');
-    }, 1200);
+    try {
+      showToast(`Initiating Twilio call to ${targetNum}...`, 'info');
 
-    setTimeout(() => {
-      setCallState('connected');
-      showToast(`Call Connected with ${activeContact?.name || targetNum}`, 'success');
-    }, 3200);
+      const res = await fetch('/api/twilio/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: targetNum,
+          employeeId: user?.id
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setCallState('ringing');
+        if (data.to) setPhoneNumber(data.to);
+        showToast(`Calling ${data.to}... Your phone will ring now!`, 'success');
+
+        setTimeout(() => {
+          setCallState('connected');
+        }, 3000);
+      } else {
+        console.error('[DIALER] Twilio Call failed:', data.error);
+        setCallState('ended');
+        showToast(data.error || 'Failed to place call via Twilio', 'error');
+        setTimeout(() => setCallState('idle'), 2000);
+      }
+    } catch (err: any) {
+      console.error('[DIALER] Exception placing call:', err);
+      setCallState('ended');
+      showToast('Error placing Twilio call', 'error');
+      setTimeout(() => setCallState('idle'), 2000);
+    }
   };
 
   const endCall = () => {
