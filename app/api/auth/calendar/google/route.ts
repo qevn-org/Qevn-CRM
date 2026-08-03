@@ -3,9 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID || '';
 
-  // Use the hardcoded env variable — this MUST match exactly what is registered
-  // in Google Cloud Console → Credentials → Authorized Redirect URIs
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/calendar/google/callback';
+  // Use env var for production, fallback to localhost for local development
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000/api/auth/calendar/google/callback' : 'https://crm.qevn.in/api/auth/calendar/google/callback');
 
   // If no credentials configured, fallback to mock callback trigger
   if (!clientId) {
