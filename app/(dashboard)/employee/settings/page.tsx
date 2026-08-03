@@ -47,12 +47,13 @@ export default function SettingsPage() {
     if (connected === 'google') {
       showToast('Google Calendar connected successfully!', 'success');
       window.history.replaceState({}, '', '/employee/settings');
+      fetchIntegrations();
     } else if (error) {
       const message = OAUTH_ERROR_MESSAGES[error] ?? `Connection failed: ${error}`;
       showToast(message, 'error');
       window.history.replaceState({}, '', '/employee/settings');
     }
-  }, [searchParams]);
+  }, [searchParams, user]);
 
   const handleConnect = (provider: 'google') => {
     showToast(`Redirecting to ${provider} OAuth consent screen...`, 'info');

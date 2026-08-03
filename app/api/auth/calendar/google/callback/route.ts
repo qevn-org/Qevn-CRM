@@ -26,19 +26,25 @@ export async function GET(request: NextRequest) {
   let employeeId: string | null = null;
 
   if (isSupabase) {
-    const supabaseServer = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll().map((c) => ({ name: c.name, value: c.value }));
+    try {
+      const supabaseServer = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll().map((c) => ({ name: c.name, value: c.value }));
+          },
+          setAll() {
+            // No-op for read-only callbacks
+          },
         },
-        setAll() {
-          // No-op for read-only callbacks
-        },
-      },
-    });
-    const { data: { user } } = await supabaseServer.auth.getUser();
-    if (user) employeeId = user.id;
-  } else {
+      });
+      const { data: { user } } = await supabaseServer.auth.getUser();
+      if (user) employeeId = user.id;
+    } catch (e) {
+      console.error('[OAUTH] Failed to get user from Supabase session:', e);
+    }
+  }
+
+  if (!employeeId) {
     const cookie = request.cookies.get('qevn_user_id');
     if (cookie) employeeId = cookie.value;
   }

@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, supabaseAdmin, isSupabaseConfigured } from './supabase';
 import { 
   getMockDB, 
   saveMockDB, 
@@ -560,65 +560,74 @@ export const db = {
   // CALENDAR INTEGRATIONS
   // -----------------------------------------------------------------------
   async getCalendarIntegrations(userId: string): Promise<CalendarIntegration[]> {
-    if (useSupabase(userId) && supabase) {
-      const { data, error } = await supabase
+    const client = supabaseAdmin || supabase;
+    if (client) {
+      const { data, error } = await client
         .from('calendar_integrations')
         .select('*')
         .eq('employee_id', userId);
-      if (error) return [];
-      return data || [];
-    } else {
-      const mockDb = getMockDB();
-      return mockDb.calendar_integrations.filter(c => c.employee_id === userId);
+      if (!error && data && data.length > 0) {
+        return data;
+      }
     }
+    const mockDb = getMockDB();
+    return mockDb.calendar_integrations.filter(c => c.employee_id === userId);
   },
 
   async saveCalendarIntegration(integration: Omit<CalendarIntegration, 'id' | 'created_at'>): Promise<CalendarIntegration | null> {
-    if (useSupabase(integration.employee_id) && supabase) {
-      const { data, error } = await supabase
+    // 1. Always save in mock DB as well
+    const mockDb = getMockDB();
+    const idx = mockDb.calendar_integrations.findIndex(
+      c => c.employee_id === integration.employee_id && c.provider === integration.provider
+    );
+    const newIntegration: CalendarIntegration = {
+      ...integration,
+      id: idx !== -1 ? mockDb.calendar_integrations[idx].id : genId('cal'),
+      created_at: idx !== -1 ? mockDb.calendar_integrations[idx].created_at : new Date().toISOString()
+    };
+    if (idx !== -1) {
+      mockDb.calendar_integrations[idx] = newIntegration;
+    } else {
+      mockDb.calendar_integrations.push(newIntegration);
+    }
+    saveMockDB(mockDb);
+
+    // 2. Save in Supabase database
+    const client = supabaseAdmin || supabase;
+    if (client) {
+      const { data, error } = await client
         .from('calendar_integrations')
         .upsert(integration, { onConflict: 'employee_id,provider' })
         .select()
         .single();
-      if (error) return null;
-      return data;
-    } else {
-      const mockDb = getMockDB();
-      const idx = mockDb.calendar_integrations.findIndex(
-        c => c.employee_id === integration.employee_id && c.provider === integration.provider
-      );
-      
-      const newIntegration: CalendarIntegration = {
-        ...integration,
-        id: idx !== -1 ? mockDb.calendar_integrations[idx].id : genId('cal'),
-        created_at: idx !== -1 ? mockDb.calendar_integrations[idx].created_at : new Date().toISOString()
-      };
-
-      if (idx !== -1) {
-        mockDb.calendar_integrations[idx] = newIntegration;
-      } else {
-        mockDb.calendar_integrations.push(newIntegration);
+      if (error) {
+        console.error('[DB] saveCalendarIntegration error:', error);
+      } else if (data) {
+        return data;
       }
-      saveMockDB(mockDb);
-      return newIntegration;
     }
+
+    return newIntegration;
   },
 
   async deleteCalendarIntegration(userId: string, provider: 'google'): Promise<boolean> {
-    if (useSupabase(userId) && supabase) {
-      const { error } = await supabase
+    const mockDb = getMockDB();
+    mockDb.calendar_integrations = mockDb.calendar_integrations.filter(
+      c => !(c.employee_id === userId && c.provider === provider)
+    );
+    saveMockDB(mockDb);
+
+    const client = supabaseAdmin || supabase;
+    if (client) {
+      const { error } = await client
         .from('calendar_integrations')
         .delete()
         .eq('employee_id', userId)
         .eq('provider', provider);
-      return !error;
-    } else {
-      const mockDb = getMockDB();
-      mockDb.calendar_integrations = mockDb.calendar_integrations.filter(
-        c => !(c.employee_id === userId && c.provider === provider)
-      );
-      saveMockDB(mockDb);
-      return true;
+      if (error) {
+        console.error('[DB] deleteCalendarIntegration error:', error);
+      }
     }
+    return true;
   }
 };
