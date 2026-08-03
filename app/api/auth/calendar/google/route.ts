@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID || '';
   const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || 'localhost:3000';
-  const proto = request.headers.get('x-forwarded-proto') || 'http';
+  // Force HTTPS protocol on production domains to guarantee redirect_uri match
+  const proto = host.includes('localhost') ? 'http' : 'https';
   const redirectUri = `${proto}://${host}/api/auth/calendar/google/callback`;
 
   // If no credentials configured, fallback to mock callback trigger

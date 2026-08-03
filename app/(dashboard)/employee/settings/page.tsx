@@ -86,6 +86,28 @@ export default function SettingsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-3 pb-2">
+              <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-wider">Connected Features</p>
+              <ul className="space-y-2 text-xs text-foreground/80">
+                <li className="flex items-start">
+                  <span className="text-primary mr-2 font-bold">•</span>
+                  <span><strong>Auto-Sync CRM Events</strong>: Scheduled discovery meetings automatically synchronize with your Google Calendar.</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-primary mr-2 font-bold">•</span>
+                  <span><strong>Automatic Google Meet Link</strong>: Secure video call links are dynamically generated and attached to each meeting.</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-primary mr-2 font-bold">•</span>
+                  <span><strong>Calendar Invitations</strong>: Automated calendar invites are dispatched directly to guests, allowing them to Accept/Decline.</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-primary mr-2 font-bold">•</span>
+                  <span><strong>Instant Updates</strong>: Modifying or canceling meetings automatically sends updates to all guest calendars.</span>
+                </li>
+              </ul>
+            </div>
+
             <div className="flex items-center justify-between border-t border-border/20 pt-4">
               <div className="flex items-center space-x-2">
                 {isConnected('google') ? (
