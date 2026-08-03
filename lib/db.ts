@@ -698,7 +698,30 @@ export const db = {
       }
     }
     const mockDb = getMockDB();
-    return mockDb.twilio_integrations?.find(t => t.employee_id === userId) || null;
+    const found = mockDb.twilio_integrations?.find(t => t.employee_id === userId);
+    if (found) return found;
+
+    // Fall back to environment variables if present
+    const envSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+    const envToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+    const envPhone = process.env.TWILIO_PHONE_NUMBER?.trim();
+    const envApp = process.env.TWIML_APP_SID?.trim();
+
+    if (envSid && envToken && envPhone) {
+      return {
+        id: `env_tw_${userId}`,
+        employee_id: userId,
+        account_sid: envSid,
+        auth_token: envToken,
+        phone_number: envPhone,
+        twiml_app_sid: envApp || '',
+        recording_enabled: true,
+        status: 'Connected',
+        updated_at: new Date().toISOString()
+      };
+    }
+
+    return null;
   },
 
   async saveTwilioIntegration(integration: Omit<TwilioIntegration, 'id' | 'updated_at'>): Promise<TwilioIntegration | null> {
