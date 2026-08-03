@@ -70,14 +70,14 @@ export function Softphone() {
   return (
     <>
       {/* Floating Softphone Launcher Button (Bottom Right) */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-6 right-6 z-[9999]">
         {!isDialerOpen && (
           <button
             onClick={() => setIsDialerOpen(true)}
             className={`flex items-center space-x-2 px-4 py-3 rounded-full shadow-2xl transition-all duration-200 cursor-pointer ${
               callState === 'connected'
                 ? 'bg-emerald-500 text-white animate-pulse'
-                : 'bg-primary text-primary-foreground hover:scale-105'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold hover:scale-105 shadow-emerald-500/20'
             }`}
           >
             <Phone className="h-5 w-5" />

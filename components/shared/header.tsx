@@ -3,12 +3,14 @@
 import React, { useState } from 'react';
 import { useStore } from '@/lib/store/use-store';
 import { DropdownMenu, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { Bell, Search, User, CheckCheck, Menu } from 'lucide-react';
+import { useDialer } from '@/components/dialer/dialer-context';
+import { Bell, Search, User, CheckCheck, Menu, PhoneCall } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
   const { user, notifications, markNotificationRead, markAllNotificationsRead, toggleSidebar } = useStore();
+  const { setIsDialerOpen, callState, callDuration } = useDialer();
   const [bellOpen, setBellOpen] = useState(false);
 
   if (!user) return null;
@@ -57,7 +59,23 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-3">
+        {/* Softphone Dialer Trigger Button in Header */}
+        <button
+          onClick={() => setIsDialerOpen(true)}
+          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200 cursor-pointer ${
+            callState === 'connected'
+              ? 'bg-emerald-500 text-white border-emerald-400 animate-pulse shadow-md'
+              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+          }`}
+          title="Open Softphone Dialer"
+        >
+          <PhoneCall className="h-4 w-4" />
+          <span className="hidden sm:inline">
+            {callState === 'connected' ? `In Call` : 'Phone Dialer'}
+          </span>
+        </button>
+
         {/* Search Trigger */}
         <button
           onClick={triggerSearch}
