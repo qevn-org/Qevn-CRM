@@ -13,6 +13,7 @@ import {
   generateOutlookCalendarAddUrl 
 } from '@/lib/calendar/calendar';
 import { sendEmail, emailTemplates } from '@/lib/email/resend';
+import { AttendeeInput } from '@/components/ui/attendee-input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -22,9 +23,11 @@ import { Select } from '@/components/ui/select';
 import { Dialog } from '@/components/ui/dialog';
 import { showToast } from '@/components/ui/toast';
 import { 
-  Calendar, Plus, Link as LinkIcon, Users, Clock, Trash2, 
-  CalendarDays, Video, Mail, RefreshCw, CheckCircle2, XCircle, AlertCircle
+  Calendar as CalendarIcon, Plus, Link as LinkIcon, Users, Clock, Trash2, 
+  CalendarDays, Video, Mail, RefreshCw, CheckCircle2, XCircle, AlertTriangle, 
+  Edit3, CalendarCheck, CalendarX, ArrowRight, VideoOff, Info, CheckCircle
 } from 'lucide-react';
+import Link from 'next/link';
 
 const TIMEZONES = [
   { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST)' },
@@ -39,10 +42,19 @@ const PLATFORMS = [
   { value: 'Google Meet', label: 'Google Meet' },
   { value: 'Microsoft Teams', label: 'Microsoft Teams' },
   { value: 'Zoom', label: 'Zoom' },
-  { value: 'Webex', label: 'Webex' },
   { value: 'Phone Call', label: 'Phone Call' },
   { value: 'In Person', label: 'In Person' }
 ];
+
+const MEETING_TYPES = [
+  { value: 'Discovery Call', label: 'Discovery Call' },
+  { value: 'Product Demo', label: 'Product Demo' },
+  { value: 'Technical Review', label: 'Technical Review' },
+  { value: 'Contract Negotiation', label: 'Contract Negotiation' },
+  { value: 'Strategy Session', label: 'Strategy Session' }
+];
+
+type MeetingStatus = 'Draft' | 'Scheduled' | 'Upcoming' | 'In Progress' | 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled';
 
 function MeetingsContent() {
   const router = useRouter();
@@ -51,32 +63,48 @@ function MeetingsContent() {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterTab, setFilterTab] = useState<'All' | 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled'>('All');
+  const [filterTab, setFilterTab] = useState<string>('All');
 
-  // Modal State
+  // Modal States
   const [modalOpen, setModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
 
-  // Form Fields
+  // Form Fields for New Meeting
   const [clientId, setClientId] = useState('');
   const [meetingTitle, setMeetingTitle] = useState('');
+  const [meetingType, setMeetingType] = useState('Discovery Call');
   const [platform, setPlatform] = useState('Google Meet');
-  const [meetingLink, setMeetingLink] = useState('');
+  const [customLink, setCustomLink] = useState('');
   const [meetingDate, setMeetingDate] = useState('');
   const [meetingStart, setMeetingStart] = useState('');
   const [meetingEnd, setMeetingEnd] = useState('');
   const [timezone, setTimezone] = useState('Asia/Kolkata');
-  const [attendees, setAttendees] = useState('');
+  const [attendeeEmails, setAttendeeEmails] = useState<string[]>([]);
   const [meetingNotes, setMeetingNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form Fields for Edit / Reschedule
+  const [editTitle, setEditTitle] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editStart, setEditStart] = useState('');
+  const [editEnd, setEditEnd] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editAttendees, setEditAttendees] = useState<string[]>([]);
 
   const fetchData = async () => {
     if (!user) return;
     try {
       const clientList = await db.getClients(user.id, user.role);
       const meetingList = await db.getMeetings(user.id, user.role);
+      const integrations = await db.getCalendarIntegrations(user.id);
+      
       setClients(clientList);
       setMeetings(meetingList);
+      setIsGoogleConnected(integrations.some(i => i.provider === 'google'));
 
       // Pre-select client if client query parameter is set
       const urlClientId = searchParams.get('client');
@@ -84,7 +112,7 @@ function MeetingsContent() {
         const selected = clientList.find(c => c.id === urlClientId);
         setClientId(urlClientId);
         if (selected) {
-          if (selected.email) setAttendees(selected.email);
+          if (selected.email) setAttendeeEmails([selected.email.toLowerCase()]);
           setMeetingTitle(`Discovery Call & Demo - ${selected.company_name}`);
         }
         setModalOpen(true);
@@ -105,30 +133,20 @@ function MeetingsContent() {
     setClientId(selectedId);
     const selected = clients.find(c => c.id === selectedId);
     if (selected) {
-      if (selected.email && (!attendees || attendees === '')) {
-        setAttendees(selected.email);
+      if (selected.email && !attendeeEmails.includes(selected.email.toLowerCase())) {
+        setAttendeeEmails([...attendeeEmails, selected.email.toLowerCase()]);
       }
       if (!meetingTitle) {
-        setMeetingTitle(`Discovery Call & Demo - ${selected.company_name}`);
+        setMeetingTitle(`${meetingType} - ${selected.company_name}`);
       }
     }
   };
 
-  // When platform changes, auto-generate join link if blank or existing is auto-generated
-  const handlePlatformChange = (newPlatform: string) => {
-    setPlatform(newPlatform);
-    if (!meetingLink || meetingLink.includes('meet.google.com') || meetingLink.includes('teams.microsoft.com') || meetingLink.includes('zoom.us')) {
-      const autoLink = generateMeetingLink(newPlatform);
-      setMeetingLink(autoLink);
-    }
+  const handleConnectGoogle = () => {
+    window.location.href = '/api/auth/calendar/google';
   };
 
-  const handleAutoGenerateLink = () => {
-    const link = generateMeetingLink(platform);
-    setMeetingLink(link);
-    showToast(`Generated ${platform} link`, 'info');
-  };
-
+  // Create Meeting Flow
   const handleScheduleMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientId || !meetingTitle || !meetingDate || !meetingStart || !meetingEnd) {
@@ -136,24 +154,23 @@ function MeetingsContent() {
       return;
     }
 
+    if (attendeeEmails.length === 0) {
+      showToast('Please add at least one attendee email address', 'warning');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // 1. Auto-generate meeting link if not specified
-      const finalLink = meetingLink.trim() || generateMeetingLink(platform);
-      
-      // Ensure client email is included in attendees
       const selectedClient = clients.find(c => c.id === clientId);
-      let finalAttendees = attendees.trim();
-      if (selectedClient?.email && !finalAttendees.includes(selectedClient.email)) {
-        finalAttendees = finalAttendees ? `${selectedClient.email}, ${finalAttendees}` : selectedClient.email;
-      }
+      const attendeesStr = attendeeEmails.join(', ');
 
-      const payload = {
+      const initialPayload = {
         client_id: clientId,
         employee_id: user!.id,
         meeting_title: meetingTitle,
-        meeting_link: finalLink,
+        meeting_type: meetingType,
+        meeting_link: customLink.trim(),
         platform: platform,
         status: 'Scheduled' as const,
         meeting_date: meetingDate,
@@ -161,48 +178,47 @@ function MeetingsContent() {
         meeting_end: meetingEnd,
         timezone: timezone,
         meeting_notes: meetingNotes,
-        attendees: finalAttendees,
+        attendees: attendeesStr,
+        created_by: user!.id,
       };
 
-      // 2. Create meeting entry in CRM database
+      // 1. Create meeting entry in CRM database
       const newMeet = await db.createMeeting({
-        ...payload,
+        ...initialPayload,
         calendar_event_id: ''
       });
 
       if (!newMeet) {
-        showToast('Failed to create meeting in database', 'error');
+        showToast('Failed to save meeting in database', 'error');
         setIsSubmitting(false);
         return;
       }
 
-      // 3. Update Client stage to 'Meeting Scheduled' if currently 'Lead' or 'Contacted'
+      // 2. Update Client stage to 'Meeting Scheduled'
       if (selectedClient && ['Lead', 'Contacted'].includes(selectedClient.status)) {
         await db.updateClient(clientId, { status: 'Meeting Scheduled' });
       }
 
-      // 4. Sync with Google Calendar (if OAuth connected)
+      // 3. Sync with Google Calendar API (generates real Google Meet link)
       const syncResult = await calendarService.syncMeetingToCalendar(newMeet, user!.id);
       let updatedMeet = newMeet;
 
-      if (syncResult && syncResult.calendarEventId) {
+      if (syncResult?.need_reconnect) {
+        showToast(syncResult.error || 'Please reconnect Google Calendar', 'error');
+      }
+
+      if (syncResult && (syncResult.calendarEventId || syncResult.meetingLink)) {
         const updateRes = await db.updateMeeting(newMeet.id, {
-          calendar_event_id: syncResult.calendarEventId,
-          meeting_link: syncResult.meetingLink || newMeet.meeting_link
+          calendar_event_id: syncResult.calendarEventId || newMeet.calendar_event_id,
+          meeting_link: syncResult.meetingLink || newMeet.meeting_link || (platform !== 'Google Meet' ? generateMeetingLink(platform) : '')
         });
         if (updateRes) updatedMeet = updateRes;
       }
 
-      // 5. Send automated email invitations to ALL attendees
-      const recipientList = finalAttendees
-        .split(',')
-        .map(e => e.trim())
-        .filter(e => e.length > 0 && e.includes('@'));
-
+      // 4. Send automated email invitations to ALL attendees
       const organizerName = user?.name || 'QEVN Team';
       const organizerEmail = user?.email || 'hello@qevn.in';
 
-      // Generate Calendar Invite Assets
       const icsString = generateICSContent(updatedMeet, organizerName, organizerEmail);
       const gcalUrl = generateGoogleCalendarAddUrl(updatedMeet);
       const outlookUrl = generateOutlookCalendarAddUrl(updatedMeet);
@@ -213,17 +229,17 @@ function MeetingsContent() {
         updatedMeet.meeting_start,
         updatedMeet.meeting_end,
         updatedMeet.timezone,
-        updatedMeet.meeting_link || finalLink,
+        updatedMeet.meeting_link || '',
         organizerName,
         updatedMeet.meeting_notes || '',
         updatedMeet.platform || platform,
-        updatedMeet.attendees || finalAttendees,
+        updatedMeet.attendees || attendeesStr,
         gcalUrl,
         outlookUrl
       );
 
       let emailsSent = 0;
-      for (const recipient of recipientList) {
+      for (const recipient of attendeeEmails) {
         const sendResult = await sendEmail({
           to: recipient,
           subject: emailTemplate.subject,
@@ -249,23 +265,23 @@ function MeetingsContent() {
         'success'
       );
 
-      // 6. Audit log entry
+      // 5. Activity log
       await db.createActivity({
         client_id: clientId,
         employee_id: user!.id,
         action: 'Meeting Scheduled',
-        description: `Scheduled discovery call: "${meetingTitle}" with ${selectedClient?.client_name || 'Client'} (${finalAttendees})`
+        description: `Scheduled "${meetingTitle}" with ${selectedClient?.client_name || 'Client'} (${attendeesStr})`
       });
 
       // Reset Modal Form
       setModalOpen(false);
       setClientId('');
       setMeetingTitle('');
-      setMeetingLink('');
+      setCustomLink('');
       setMeetingDate('');
       setMeetingStart('');
       setMeetingEnd('');
-      setAttendees('');
+      setAttendeeEmails([]);
       setMeetingNotes('');
 
       fetchData();
@@ -277,111 +293,182 @@ function MeetingsContent() {
     }
   };
 
-  const handleUpdateStatus = async (meeting: Meeting, newStatus: Meeting['status']) => {
+  // Open Edit Dialog
+  const openEditModal = (meeting: Meeting) => {
+    setSelectedMeeting(meeting);
+    setEditTitle(meeting.meeting_title);
+    setEditDate(meeting.meeting_date);
+    setEditStart(meeting.meeting_start);
+    setEditEnd(meeting.meeting_end);
+    setEditNotes(meeting.meeting_notes || '');
+    setEditAttendees((meeting.attendees || '').split(',').map(e => e.trim()).filter(Boolean));
+    setEditModalOpen(true);
+  };
+
+  // Submit Edit
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMeeting) return;
+
     try {
-      const updated = await db.updateMeeting(meeting.id, { status: newStatus });
+      const attendeesStr = editAttendees.join(', ');
+      const updated = await db.updateMeeting(selectedMeeting.id, {
+        meeting_title: editTitle,
+        meeting_date: editDate,
+        meeting_start: editStart,
+        meeting_end: editEnd,
+        meeting_notes: editNotes,
+        attendees: attendeesStr,
+        updated_by: user!.id
+      });
+
       if (updated) {
-        showToast(`Meeting status updated to ${newStatus}`, 'success');
-        
-        // Audit log
+        // Sync update with Google Calendar
+        await calendarService.updateMeetingInCalendar(updated, user!.id);
+
+        showToast('Meeting updated successfully', 'success');
+
+        await db.createActivity({
+          client_id: updated.client_id,
+          employee_id: user!.id,
+          action: 'Meeting Updated',
+          description: `Updated call details for "${editTitle}"`
+        });
+
+        setEditModalOpen(false);
+        fetchData();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to update meeting', 'error');
+    }
+  };
+
+  // Reschedule Action
+  const openRescheduleModal = (meeting: Meeting) => {
+    setSelectedMeeting(meeting);
+    setEditDate(meeting.meeting_date);
+    setEditStart(meeting.meeting_start);
+    setEditEnd(meeting.meeting_end);
+    setRescheduleModalOpen(true);
+  };
+
+  const handleSaveReschedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMeeting) return;
+
+    try {
+      const updated = await db.updateMeeting(selectedMeeting.id, {
+        meeting_date: editDate,
+        meeting_start: editStart,
+        meeting_end: editEnd,
+        status: 'Rescheduled',
+        updated_by: user!.id
+      });
+
+      if (updated) {
+        // Sync with Google Calendar API
+        await calendarService.updateMeetingInCalendar(updated, user!.id);
+
+        // Re-send updated invitations to all attendees
+        const attendeeList = (updated.attendees || '').split(',').map(e => e.trim()).filter(Boolean);
+        const organizerName = user?.name || 'QEVN Team';
+        const organizerEmail = user?.email || 'hello@qevn.in';
+
+        const icsString = generateICSContent(updated, organizerName, organizerEmail);
+        const gcalUrl = generateGoogleCalendarAddUrl(updated);
+        const outlookUrl = generateOutlookCalendarAddUrl(updated);
+
+        const emailTemplate = emailTemplates.meetingInvitation(
+          `Rescheduled: ${updated.meeting_title}`,
+          updated.meeting_date,
+          updated.meeting_start,
+          updated.meeting_end,
+          updated.timezone,
+          updated.meeting_link || '',
+          organizerName,
+          updated.meeting_notes || '',
+          updated.platform || 'Google Meet',
+          updated.attendees || '',
+          gcalUrl,
+          outlookUrl
+        );
+
+        for (const recipient of attendeeList) {
+          await sendEmail({
+            to: recipient,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+            clientId: updated.client_id,
+            employeeId: user!.id,
+            template: 'Meeting Rescheduled Notification',
+            attachments: [{ filename: 'rescheduled_invite.ics', content: icsString }]
+          });
+        }
+
+        showToast(`Meeting rescheduled to ${editDate}. Notifications sent to attendees.`, 'success');
+
+        await db.createActivity({
+          client_id: updated.client_id,
+          employee_id: user!.id,
+          action: 'Meeting Rescheduled',
+          description: `Rescheduled "${updated.meeting_title}" to ${editDate} ${editStart}`
+        });
+
+        setRescheduleModalOpen(false);
+        fetchData();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to reschedule meeting', 'error');
+    }
+  };
+
+  // Cancel Meeting
+  const handleCancelMeeting = async (meeting: Meeting) => {
+    if (!confirm(`Are you sure you want to cancel the meeting: "${meeting.meeting_title}"?`)) return;
+
+    try {
+      // Delete from Google Calendar
+      await calendarService.deleteMeetingFromCalendar(meeting, user!.id);
+
+      // Update status to Cancelled in DB
+      const updated = await db.updateMeeting(meeting.id, { status: 'Cancelled' });
+      if (updated) {
+        showToast('Meeting cancelled and removed from Google Calendar', 'info');
+
         await db.createActivity({
           client_id: meeting.client_id,
           employee_id: user!.id,
-          action: 'Meeting Updated',
-          description: `Updated call status for "${meeting.meeting_title}" to ${newStatus}`
+          action: 'Meeting Cancelled',
+          description: `Cancelled call: "${meeting.meeting_title}"`
         });
 
-        // Also update client status if marked completed
+        fetchData();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error cancelling meeting', 'error');
+    }
+  };
+
+  const handleUpdateStatus = async (meeting: Meeting, newStatus: MeetingStatus) => {
+    try {
+      const updated = await db.updateMeeting(meeting.id, { status: newStatus });
+      if (updated) {
+        showToast(`Status updated to ${newStatus}`, 'success');
+
         if (newStatus === 'Completed') {
           await db.updateClient(meeting.client_id, { status: 'Meeting Completed' });
         }
 
-        fetchData();
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Failed to update meeting status', 'error');
-    }
-  };
-
-  const handleResendInvites = async (meeting: Meeting) => {
-    if (!meeting.attendees) {
-      showToast('No attendees registered for this meeting', 'warning');
-      return;
-    }
-
-    try {
-      const recipientList = meeting.attendees
-        .split(',')
-        .map(e => e.trim())
-        .filter(e => e.length > 0 && e.includes('@'));
-
-      const organizerName = user?.name || 'QEVN Team';
-      const organizerEmail = user?.email || 'hello@qevn.in';
-
-      const icsString = generateICSContent(meeting, organizerName, organizerEmail);
-      const gcalUrl = generateGoogleCalendarAddUrl(meeting);
-      const outlookUrl = generateOutlookCalendarAddUrl(meeting);
-
-      const emailTemplate = emailTemplates.meetingInvitation(
-        meeting.meeting_title,
-        meeting.meeting_date,
-        meeting.meeting_start,
-        meeting.meeting_end,
-        meeting.timezone,
-        meeting.meeting_link || '',
-        organizerName,
-        meeting.meeting_notes || '',
-        meeting.platform || 'Google Meet',
-        meeting.attendees,
-        gcalUrl,
-        outlookUrl
-      );
-
-      let emailsSent = 0;
-      for (const recipient of recipientList) {
-        const sendResult = await sendEmail({
-          to: recipient,
-          subject: emailTemplate.subject,
-          html: emailTemplate.html,
-          clientId: meeting.client_id,
-          employeeId: user!.id,
-          template: 'Meeting Invitation Resend',
-          attachments: [
-            {
-              filename: 'invite.ics',
-              content: icsString,
-              contentType: 'text/calendar; method=REQUEST'
-            }
-          ]
-        });
-        if (sendResult.success) emailsSent++;
-      }
-
-      showToast(`Resent invitations to ${emailsSent} attendee(s)`, 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('Failed to resend invitations', 'error');
-    }
-  };
-
-  const handleDeleteMeeting = async (meeting: Meeting) => {
-    if (!confirm(`Are you sure you want to cancel and remove meeting: "${meeting.meeting_title}"?`)) return;
-    try {
-      // 1. Delete from external calendar
-      await calendarService.deleteMeetingFromCalendar(meeting, user!.id);
-
-      // 2. Delete from database
-      const success = await db.deleteMeeting(meeting.id);
-      if (success) {
-        showToast('Meeting cancelled and removed', 'success');
-        
         await db.createActivity({
           client_id: meeting.client_id,
           employee_id: user!.id,
-          action: 'Meeting Deleted',
-          description: `Cancelled discovery call: "${meeting.meeting_title}"`
+          action: 'Meeting Status Updated',
+          description: `Status for "${meeting.meeting_title}" changed to ${newStatus}`
         });
+
         fetchData();
       }
     } catch (err) {
@@ -389,24 +476,39 @@ function MeetingsContent() {
     }
   };
 
-  // Filter meetings by active status tab
+  // Filter meetings by active tab
   const filteredMeetings = meetings.filter(m => {
     if (filterTab === 'All') return true;
     return (m.status || 'Scheduled') === filterTab;
   });
 
+  // Calculate statistics
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayMeetingsCount = meetings.filter(m => m.meeting_date === todayStr).length;
+  const upcomingMeetingsCount = meetings.filter(m => m.meeting_date >= todayStr && m.status !== 'Cancelled' && m.status !== 'Completed').length;
+  const completedMeetingsCount = meetings.filter(m => m.status === 'Completed').length;
+  const cancelledMeetingsCount = meetings.filter(m => m.status === 'Cancelled').length;
+
   const getStatusBadge = (status?: string) => {
-    const st = status || 'Scheduled';
-    if (st === 'Scheduled') {
-      return <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-400">Scheduled</Badge>;
-    } else if (st === 'Completed') {
-      return <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-400">Completed</Badge>;
-    } else if (st === 'Cancelled') {
-      return <Badge variant="outline" className="border-red-500/40 bg-red-500/10 text-red-400">Cancelled</Badge>;
-    } else if (st === 'Rescheduled') {
-      return <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-400">Rescheduled</Badge>;
+    const st = (status || 'Scheduled') as MeetingStatus;
+    switch (st) {
+      case 'Scheduled':
+        return <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-400 font-semibold">Scheduled</Badge>;
+      case 'Upcoming':
+        return <Badge variant="outline" className="border-indigo-500/40 bg-indigo-500/10 text-indigo-400 font-semibold">Upcoming</Badge>;
+      case 'In Progress':
+        return <Badge variant="outline" className="border-purple-500/40 bg-purple-500/10 text-purple-400 font-semibold animate-pulse">In Progress</Badge>;
+      case 'Completed':
+        return <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold">Completed</Badge>;
+      case 'Cancelled':
+        return <Badge variant="outline" className="border-red-500/40 bg-red-500/10 text-red-400 font-semibold">Cancelled</Badge>;
+      case 'No Show':
+        return <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-300 font-semibold">No Show</Badge>;
+      case 'Rescheduled':
+        return <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-400 font-semibold">Rescheduled</Badge>;
+      default:
+        return <Badge variant="outline">{st}</Badge>;
     }
-    return <Badge variant="outline">{st}</Badge>;
   };
 
   return (
@@ -414,22 +516,81 @@ function MeetingsContent() {
       {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">Meetings & Scheduler Workspace</h2>
-          <p className="text-sm text-muted-foreground mt-1">Schedule discovery calls, generate meeting links, and manage calendar invitations.</p>
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">Meetings & Calendar Hub</h2>
+          <p className="text-sm text-muted-foreground mt-1">Enterprise meeting scheduler with Google Calendar API sync and real Google Meet room creation.</p>
         </div>
-        <Button className="flex items-center" onClick={() => {
-          if (!meetingLink) {
-            setMeetingLink(generateMeetingLink('Google Meet'));
-          }
-          setModalOpen(true);
-        }}>
-          <Plus className="mr-2 h-4 w-4" /> Schedule Call
+        <Button className="flex items-center" onClick={() => setModalOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Schedule Meeting
         </Button>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Google Calendar Connection Status Banner */}
+      {!isGoogleConnected && (
+        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center space-x-3">
+            <AlertTriangle className="h-6 w-6 text-amber-400 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-200">Google Calendar Disconnected or Expired</p>
+              <p className="text-xs text-amber-300/80 mt-0.5">Connect your Google account to automatically generate valid Google Meet rooms via Google Calendar API.</p>
+            </div>
+          </div>
+          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold flex-shrink-0" onClick={handleConnectGoogle}>
+            Connect Google Calendar <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+
+      {/* KPI Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="hover:border-primary/40 transition-colors">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Today&apos;s Meetings</p>
+              <p className="text-2xl font-bold mt-1 text-foreground">{todayMeetingsCount}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-purple-500/10 text-purple-400">
+              <Clock className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="hover:border-primary/40 transition-colors">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Upcoming</p>
+              <p className="text-2xl font-bold mt-1 text-foreground">{upcomingMeetingsCount}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-blue-500/10 text-blue-400">
+              <CalendarIcon className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="hover:border-primary/40 transition-colors">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Completed</p>
+              <p className="text-2xl font-bold mt-1 text-foreground">{completedMeetingsCount}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-400">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="hover:border-primary/40 transition-colors">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Cancelled</p>
+              <p className="text-2xl font-bold mt-1 text-foreground">{cancelledMeetingsCount}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-red-500/10 text-red-400">
+              <XCircle className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Status Filter Tabs */}
       <div className="flex space-x-2 border-b border-border/20 pb-2 overflow-x-auto">
-        {(['All', 'Scheduled', 'Completed', 'Cancelled', 'Rescheduled'] as const).map(tab => (
+        {(['All', 'Scheduled', 'Upcoming', 'Completed', 'Cancelled', 'Rescheduled'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setFilterTab(tab)}
@@ -444,11 +605,11 @@ function MeetingsContent() {
         ))}
       </div>
 
-      {/* Scheduled meetings agenda table */}
+      {/* Meetings Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Meetings Agenda</CardTitle>
-          <CardDescription>Review scheduled video calls, attendees, and invitation status.</CardDescription>
+          <CardTitle>Scheduled Agenda</CardTitle>
+          <CardDescription>Review upcoming meetings, attendees, and Google Meet room status.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -461,17 +622,17 @@ function MeetingsContent() {
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <CalendarDays className="h-12 w-12 text-muted-foreground/60 mb-3" />
               <h3 className="text-md font-bold">No meetings found</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Use the Schedule button to initiate call events.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Use the Schedule Meeting button to create call events.</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Meeting Details</TableHead>
+                  <TableHead>Meeting & Type</TableHead>
                   <TableHead>Client & Company</TableHead>
                   <TableHead>Date & Time</TableHead>
                   <TableHead>Attendees</TableHead>
-                  <TableHead>Meeting Link</TableHead>
+                  <TableHead>Meeting Room</TableHead>
                   <TableHead>Status & Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -487,21 +648,23 @@ function MeetingsContent() {
                     <TableRow key={meet.id}>
                       <TableCell>
                         <div className="flex flex-col space-y-1">
-                          <span className="font-bold text-foreground flex items-center gap-2">
-                            {meet.meeting_title}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground/90">
-                            Platform: <strong>{meet.platform || 'Google Meet'}</strong>
-                          </span>
-                          {meet.meeting_notes && (
-                            <span className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{meet.meeting_notes}</span>
-                          )}
+                          <span className="font-bold text-foreground">{meet.meeting_title}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] bg-secondary/60 text-secondary-foreground px-1.5 py-0.5 rounded font-semibold uppercase">
+                              {meet.meeting_type || 'Discovery'}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {meet.platform || 'Google Meet'}
+                            </span>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         {client ? (
                           <div className="flex flex-col">
-                            <span className="font-medium text-foreground">{client.client_name}</span>
+                            <Link href={`/employee/clients/${client.id}`} className="font-medium text-foreground hover:text-primary hover:underline transition-colors">
+                              {client.client_name}
+                            </Link>
                             <span className="text-[11px] text-muted-foreground">{client.company_name}</span>
                           </div>
                         ) : (
@@ -523,7 +686,7 @@ function MeetingsContent() {
                         ) : (
                           <div className="flex flex-wrap gap-1 max-w-[200px]">
                             {attendeeList.map((email, idx) => (
-                              <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-secondary/60 text-secondary-foreground border border-border/40 truncate">
+                              <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-primary/10 text-primary border border-primary/20 truncate">
                                 {email}
                               </span>
                             ))}
@@ -536,44 +699,46 @@ function MeetingsContent() {
                             href={meet.meeting_link}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-xs text-primary hover:underline flex items-center font-medium"
+                            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors"
                           >
-                            <LinkIcon className="h-3 w-3 mr-1.5" />
-                            Join Video Call
+                            <Video className="h-3.5 w-3.5 mr-1.5" />
+                            Join Call
                           </a>
                         ) : (
-                          <span className="text-xs text-muted-foreground">No link provided</span>
+                          <span className="text-xs text-muted-foreground">No link active</span>
                         )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
                           {getStatusBadge(meet.status)}
-                          
-                          {/* Quick status selector */}
+
+                          {/* Quick Status Dropdown */}
                           <select
                             className="text-[11px] bg-secondary/40 border border-border/40 rounded px-1.5 py-1 text-foreground cursor-pointer focus:outline-none"
                             value={meet.status || 'Scheduled'}
-                            onChange={(e) => handleUpdateStatus(meet, e.target.value as Meeting['status'])}
+                            onChange={(e) => handleUpdateStatus(meet, e.target.value as MeetingStatus)}
                           >
                             <option value="Scheduled">Scheduled</option>
+                            <option value="Upcoming">Upcoming</option>
+                            <option value="In Progress">In Progress</option>
                             <option value="Completed">Completed</option>
                             <option value="Cancelled">Cancelled</option>
+                            <option value="No Show">No Show</option>
                             <option value="Rescheduled">Rescheduled</option>
                           </select>
 
-                          {/* Resend invite button */}
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="p-1 h-7 text-xs" 
-                            title="Resend email invitations"
-                            onClick={() => handleResendInvites(meet)}
-                          >
-                            <Mail className="h-3.5 w-3.5 text-primary" />
+                          {/* Edit Action */}
+                          <Button variant="ghost" size="sm" className="p-1 h-7 text-xs" title="Edit Meeting" onClick={() => openEditModal(meet)}>
+                            <Edit3 className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                           </Button>
 
-                          {/* Delete button */}
-                          <Button variant="ghost" size="sm" className="p-1 h-7" onClick={() => handleDeleteMeeting(meet)}>
+                          {/* Reschedule Action */}
+                          <Button variant="ghost" size="sm" className="p-1 h-7 text-xs" title="Reschedule" onClick={() => openRescheduleModal(meet)}>
+                            <CalendarIcon className="h-3.5 w-3.5 text-amber-400" />
+                          </Button>
+
+                          {/* Cancel Action */}
+                          <Button variant="ghost" size="sm" className="p-1 h-7 text-xs" title="Cancel Meeting" onClick={() => handleCancelMeeting(meet)}>
                             <Trash2 className="h-3.5 w-3.5 text-red-400" />
                           </Button>
                         </div>
@@ -587,16 +752,16 @@ function MeetingsContent() {
         </CardContent>
       </Card>
 
-      {/* Add/Edit Meeting Dialog */}
+      {/* Schedule Meeting Dialog */}
       <Dialog
         open={modalOpen}
         onOpenChange={setModalOpen}
         title="Schedule New Meeting"
-        description="Fill in meeting details to automatically generate video links, save to CRM, and dispatch email invitations."
+        description="Select attendees and timing. Real Google Meet room will be created via Google Calendar API."
       >
         <form onSubmit={handleScheduleMeeting} className="space-y-4">
           <Select
-            label="Select Client *"
+            label="Select CRM Client *"
             options={[
               { value: '', label: 'Select client...' },
               ...clients.map(c => ({ value: c.id, label: `${c.client_name} (${c.company_name})` }))
@@ -606,20 +771,28 @@ function MeetingsContent() {
             required
           />
 
-          <Input
-            label="Meeting Title *"
-            placeholder="e.g. Discovery Call & Demo - Stripe"
-            value={meetingTitle}
-            onChange={(e) => setMeetingTitle(e.target.value)}
-            required
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Meeting Title *"
+              placeholder="e.g. Product Discovery & Demo"
+              value={meetingTitle}
+              onChange={(e) => setMeetingTitle(e.target.value)}
+              required
+            />
+            <Select
+              label="Meeting Type *"
+              options={MEETING_TYPES}
+              value={meetingType}
+              onChange={(e) => setMeetingType(e.target.value)}
+            />
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select
-              label="Meeting Platform *"
+              label="Platform *"
               options={PLATFORMS}
               value={platform}
-              onChange={(e) => handlePlatformChange(e.target.value)}
+              onChange={(e) => setPlatform(e.target.value)}
             />
             <Select
               label="Timezone *"
@@ -627,6 +800,9 @@ function MeetingsContent() {
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input
               label="Meeting Date *"
               type="date"
@@ -634,63 +810,45 @@ function MeetingsContent() {
               onChange={(e) => setMeetingDate(e.target.value)}
               required
             />
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                label="Start Time *"
-                type="time"
-                value={meetingStart}
-                onChange={(e) => setMeetingStart(e.target.value)}
-                required
-              />
-              <Input
-                label="End Time *"
-                type="time"
-                value={meetingEnd}
-                onChange={(e) => setMeetingEnd(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Meeting Join Link (Auto-Generated)
-              </label>
-              <button
-                type="button"
-                onClick={handleAutoGenerateLink}
-                className="text-[11px] text-primary hover:underline flex items-center font-medium cursor-pointer"
-              >
-                <RefreshCw className="h-3 w-3 mr-1" /> Regenerate Link
-              </button>
-            </div>
             <Input
-              placeholder="Auto-generated Google Meet / Teams link"
-              value={meetingLink}
-              onChange={(e) => setMeetingLink(e.target.value)}
+              label="Start Time *"
+              type="time"
+              value={meetingStart}
+              onChange={(e) => setMeetingStart(e.target.value)}
+              required
+            />
+            <Input
+              label="End Time *"
+              type="time"
+              value={meetingEnd}
+              onChange={(e) => setMeetingEnd(e.target.value)}
+              required
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Invite Attendees (Comma-Separated Emails)
-            </label>
+          {/* Attendee Input Chip Component */}
+          <AttendeeInput
+            label="Attendees (Multi-Select)"
+            value={attendeeEmails}
+            onChange={setAttendeeEmails}
+            clients={clients}
+            placeholder="Type email or search contact name..."
+          />
+
+          {platform !== 'Google Meet' && (
             <Input
-              placeholder="e.g. aditya@stripe.com, team@stripe.com, manager@qevn.in"
-              value={attendees}
-              onChange={(e) => setAttendees(e.target.value)}
+              label="Custom Video Call URL"
+              placeholder="e.g. Teams or Zoom link"
+              value={customLink}
+              onChange={(e) => setCustomLink(e.target.value)}
             />
-            <p className="text-[11px] text-muted-foreground">
-              Automated email invitations with calendar (.ics) attachments will be sent to all recipient addresses.
-            </p>
-          </div>
+          )}
 
           <div className="flex flex-col space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Agenda / Description Notes</label>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Agenda / Meeting Notes</label>
             <textarea
               className="flex min-h-[70px] w-full rounded-lg border border-border/40 bg-secondary/35 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              placeholder="Outline specific discussion topics, call objectives, and agenda items..."
+              placeholder="Outline specific objectives and agenda topics..."
               value={meetingNotes}
               onChange={(e) => setMeetingNotes(e.target.value)}
             />
@@ -706,13 +864,123 @@ function MeetingsContent() {
           </div>
         </form>
       </Dialog>
+
+      {/* Edit Meeting Dialog */}
+      <Dialog
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        title="Edit Meeting Details"
+        description="Modify call parameters and sync changes with Google Calendar."
+      >
+        <form onSubmit={handleSaveEdit} className="space-y-4">
+          <Input
+            label="Meeting Title"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            required
+          />
+
+          <div className="grid grid-cols-3 gap-3">
+            <Input
+              label="Date"
+              type="date"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
+              required
+            />
+            <Input
+              label="Start"
+              type="time"
+              value={editStart}
+              onChange={(e) => setEditStart(e.target.value)}
+              required
+            />
+            <Input
+              label="End"
+              type="time"
+              value={editEnd}
+              onChange={(e) => setEditEnd(e.target.value)}
+              required
+            />
+          </div>
+
+          <AttendeeInput
+            label="Attendees"
+            value={editAttendees}
+            onChange={setEditAttendees}
+            clients={clients}
+          />
+
+          <div className="flex flex-col space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Agenda / Notes</label>
+            <textarea
+              className="flex min-h-[70px] w-full rounded-lg border border-border/40 bg-secondary/35 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+            />
+          </div>
+
+          <div className="flex justify-end space-x-2 pt-4 border-t border-border/10">
+            <Button type="button" variant="outline" onClick={() => setEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              Save & Sync Changes
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Reschedule Dialog */}
+      <Dialog
+        open={rescheduleModalOpen}
+        onOpenChange={setRescheduleModalOpen}
+        title="Reschedule Meeting"
+        description="Select new date and time for the meeting. Notifications will be sent to all attendees."
+      >
+        <form onSubmit={handleSaveReschedule} className="space-y-4">
+          <Input
+            label="New Meeting Date *"
+            type="date"
+            value={editDate}
+            onChange={(e) => setEditDate(e.target.value)}
+            required
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Start Time *"
+              type="time"
+              value={editStart}
+              onChange={(e) => setEditStart(e.target.value)}
+              required
+            />
+            <Input
+              label="End Time *"
+              type="time"
+              value={editEnd}
+              onChange={(e) => setEditEnd(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="flex justify-end space-x-2 pt-4 border-t border-border/10">
+            <Button type="button" variant="outline" onClick={() => setRescheduleModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              Reschedule & Notify Attendees
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }
 
 export default function MeetingsPage() {
   return (
-    <Suspense fallback={<div className="text-center py-20 text-muted-foreground">Loading meetings view...</div>}>
+    <Suspense fallback={<div className="text-center py-20 text-muted-foreground">Loading meetings workspace...</div>}>
       <MeetingsContent />
     </Suspense>
   );

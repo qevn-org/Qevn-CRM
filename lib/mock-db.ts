@@ -56,7 +56,8 @@ export interface Meeting {
   meeting_title: string;
   meeting_link?: string;
   platform?: string;
-  status?: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled';
+  meeting_type?: string;
+  status?: 'Draft' | 'Scheduled' | 'Upcoming' | 'In Progress' | 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled';
   meeting_date: string;
   meeting_start: string;
   meeting_end: string;
@@ -64,6 +65,9 @@ export interface Meeting {
   calendar_event_id?: string;
   meeting_notes?: string;
   attendees?: string;
+  deal_id?: string;
+  created_by?: string;
+  updated_by?: string;
   feedback_sent: boolean;
   followup_sent: boolean;
   feedback_reminder_sent: boolean;
