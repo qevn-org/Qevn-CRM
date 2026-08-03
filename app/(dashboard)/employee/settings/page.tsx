@@ -1,16 +1,26 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useStore } from '@/lib/store/use-store';
 import { db } from '@/lib/db';
 import { CalendarIntegration } from '@/lib/mock-db';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/components/ui/toast';
-import { Calendar, CheckCircle2, XCircle, ArrowRight, RefreshCw } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, ArrowRight } from 'lucide-react';
+
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  no_code: 'Google did not return an authorization code. Please try connecting again.',
+  exchange_failed: 'Failed to exchange the authorization code. Check that GOOGLE_CLIENT_SECRET is set correctly.',
+  state_mismatch: 'OAuth security check failed. Please try connecting again.',
+  crash: 'An unexpected error occurred during Google Calendar connection.',
+  access_denied: 'You declined Google Calendar access. Connect again when ready.',
+};
 
 export default function SettingsPage() {
   const { user } = useStore();
+  const searchParams = useSearchParams();
   const [integrations, setIntegrations] = useState<CalendarIntegration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,6 +39,20 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchIntegrations();
   }, [user]);
+
+  useEffect(() => {
+    const connected = searchParams.get('connected');
+    const error = searchParams.get('error');
+
+    if (connected === 'google') {
+      showToast('Google Calendar connected successfully!', 'success');
+      window.history.replaceState({}, '', '/employee/settings');
+    } else if (error) {
+      const message = OAUTH_ERROR_MESSAGES[error] ?? `Connection failed: ${error}`;
+      showToast(message, 'error');
+      window.history.replaceState({}, '', '/employee/settings');
+    }
+  }, [searchParams]);
 
   const handleConnect = (provider: 'google') => {
     showToast(`Redirecting to ${provider} OAuth consent screen...`, 'info');
