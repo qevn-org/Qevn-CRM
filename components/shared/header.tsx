@@ -60,22 +60,6 @@ export const Header: React.FC = () => {
 
       {/* Action Buttons */}
       <div className="flex items-center space-x-3">
-        {/* Softphone Dialer Trigger Button in Header */}
-        <button
-          onClick={() => setIsDialerOpen(true)}
-          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200 cursor-pointer ${
-            callState === 'connected'
-              ? 'bg-emerald-500 text-white border-emerald-400 animate-pulse shadow-md'
-              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-          }`}
-          title="Open Softphone Dialer"
-        >
-          <PhoneCall className="h-4 w-4" />
-          <span className="hidden sm:inline">
-            {callState === 'connected' ? `In Call` : 'Phone Dialer'}
-          </span>
-        </button>
-
         {/* Search Trigger */}
         <button
           onClick={triggerSearch}

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { useDialer } from '@/components/dialer/dialer-context';
 import { PhoneCall, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,13 +27,15 @@ export function ClickToCall({
   className = '',
   label
 }: ClickToCallProps) {
-  const { openDialerWithNumber, startCall } = useDialer();
+  const router = useRouter();
+  const { openDialerWithNumber } = useDialer();
 
   if (!phone) return null;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
+
     openDialerWithNumber(phone, {
       client_id: clientId,
       name,
@@ -40,13 +43,15 @@ export function ClickToCall({
       email,
       phone
     });
-    startCall(phone, {
-      client_id: clientId,
-      name,
-      company,
-      email,
-      phone
+
+    const params = new URLSearchParams({
+      phone,
+      ...(name ? { name } : {}),
+      ...(company ? { company } : {}),
+      ...(clientId ? { clientId } : {})
     });
+
+    router.push(`/employee/dialer?${params.toString()}`);
   };
 
   if (variant === 'icon') {

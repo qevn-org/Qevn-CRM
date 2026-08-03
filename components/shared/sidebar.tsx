@@ -50,7 +50,8 @@ export const Sidebar: React.FC = () => {
     { name: 'Clients', href: '/employee/clients', icon: Users },
     { name: 'Pipeline', href: '/employee/pipeline', icon: KanbanSquare },
     { name: 'Meetings', href: '/employee/meetings', icon: Calendar },
-    { name: 'Call History', href: '/employee/calls', icon: PhoneCall },
+    { name: 'Dialer', href: '/employee/dialer', icon: PhoneCall },
+    { name: 'Call History', href: '/employee/calls', icon: Activity },
     { name: 'Settings', href: '/employee/settings', icon: Settings },
   ];
 
