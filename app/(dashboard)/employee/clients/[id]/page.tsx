@@ -598,7 +598,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
                     <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Meetings History</h4>
                     <Link href={`/employee/meetings?client=${clientId}`}>
                       <Button size="sm" className="flex items-center">
-                        <Plus className="mr-2 h-3 w-3" /> Schedule
+                        <Plus className="mr-2 h-3 w-3" /> Schedule Call
                       </Button>
                     </Link>
                   </div>
@@ -607,43 +607,79 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
                     {meetings.length === 0 ? (
                       <p className="text-center text-xs text-muted-foreground py-10">No meetings scheduled.</p>
                     ) : (
-                      meetings.map((meet) => (
-                        <div key={meet.id} className="p-4 rounded-xl border border-border/20 bg-secondary/15 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                          <div className="space-y-1">
-                            <h5 className="font-semibold text-sm">{meet.meeting_title}</h5>
-                            <p className="text-xs text-muted-foreground">
-                              {meet.meeting_date} at {meet.meeting_start} - {meet.meeting_end} ({meet.timezone})
-                            </p>
-                            {meet.meeting_link && (
-                              <a href={meet.meeting_link} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline flex items-center mt-1">
-                                Call Join Link: {meet.meeting_link}
-                              </a>
-                            )}
-                          </div>
+                      meetings.map((meet) => {
+                        const attendeeList = (meet.attendees || '')
+                          .split(',')
+                          .map(a => a.trim())
+                          .filter(Boolean);
 
-                          {/* Email notification controllers */}
-                          <div className="flex sm:flex-col gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-xs py-1 h-8"
-                              onClick={() => handleSendFeedback(meet)}
-                              disabled={meet.feedback_sent}
-                            >
-                              {meet.feedback_sent ? 'Feedback Sent' : 'Send Feedback'}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-xs py-1 h-8"
-                              onClick={() => handleSendFollowup(meet)}
-                              disabled={meet.followup_sent}
-                            >
-                              {meet.followup_sent ? 'Followup Sent' : 'Send Follow-up'}
-                            </Button>
+                        const st = meet.status || 'Scheduled';
+
+                        return (
+                          <div key={meet.id} className="p-4 rounded-xl border border-border/20 bg-secondary/15 flex flex-col gap-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="space-y-1">
+                                <div className="flex items-center space-x-2">
+                                  <h5 className="font-semibold text-sm">{meet.meeting_title}</h5>
+                                  <Badge variant="outline" className={`text-[10px] ${
+                                    st === 'Scheduled' ? 'border-blue-500/40 text-blue-400 bg-blue-500/10' :
+                                    st === 'Completed' ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10' :
+                                    st === 'Cancelled' ? 'border-red-500/40 text-red-400 bg-red-500/10' :
+                                    'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                                  }`}>
+                                    {st}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {meet.meeting_date} at {meet.meeting_start} - {meet.meeting_end} ({meet.timezone}) • Platform: <strong>{meet.platform || 'Google Meet'}</strong>
+                                </p>
+                              </div>
+
+                              {meet.meeting_link && (
+                                <a href={meet.meeting_link} target="_blank" rel="noreferrer">
+                                  <Button variant="outline" size="sm" className="text-xs">
+                                    Join Call
+                                  </Button>
+                                </a>
+                              )}
+                            </div>
+
+                            {/* Attendees list */}
+                            {attendeeList.length > 0 && (
+                              <div className="flex items-center space-x-1 flex-wrap text-xs pt-1 border-t border-border/10">
+                                <span className="text-[10px] text-muted-foreground font-semibold uppercase mr-1">Attendees:</span>
+                                {attendeeList.map((email, idx) => (
+                                  <span key={idx} className="text-[10px] bg-secondary/60 text-secondary-foreground border border-border/30 rounded px-1.5 py-0.5">
+                                    {email}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Email notification controllers */}
+                            <div className="flex flex-wrap gap-2 pt-2 border-t border-border/10">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs py-1 h-8"
+                                onClick={() => handleSendFeedback(meet)}
+                                disabled={meet.feedback_sent}
+                              >
+                                {meet.feedback_sent ? 'Feedback Sent' : 'Send Feedback Email'}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs py-1 h-8"
+                                onClick={() => handleSendFollowup(meet)}
+                                disabled={meet.followup_sent}
+                              >
+                                {meet.followup_sent ? 'Followup Sent' : 'Send Follow-up Email'}
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

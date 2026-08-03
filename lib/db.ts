@@ -15,8 +15,18 @@ import {
 // Helper to generate IDs when in mock mode
 const genId = (prefix: string) => `${prefix}_${Math.random().toString(36).substr(2, 9)}`;
 
-// Dynamic Router (force true in production mode)
+// Helper to check valid UUID
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isUUID = (id?: string) => {
+  if (!id) return false;
+  return UUID_REGEX.test(id);
+};
+
+// Dynamic Router: checks if Supabase is available and ID format is valid UUID
 const useSupabase = (id?: string) => {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  if (id && !isUUID(id)) return false;
   return true;
 };
 
@@ -33,22 +43,25 @@ export const db = {
         email,
         password,
       });
-      if (authError || !authData.user) {
-        return { profile: null, error: authError?.message || 'Login failed' };
+      if (!authError && authData.user) {
+        const { data: profile, error: profError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+        
+        if (!profError && profile) {
+          return { profile, error: null };
+        }
       }
-      // Get profile
-      const { data: profile, error: profError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
-      
-      if (profError) {
-        return { profile: null, error: profError.message };
-      }
+    }
+    // Fallback to local DB login for demo/mock users
+    const mockDb = getMockDB();
+    const profile = mockDb.profiles.find(p => p.email.toLowerCase() === email.toLowerCase()) || null;
+    if (profile) {
       return { profile, error: null };
     }
-    return { profile: null, error: 'Database is not configured' };
+    return { profile: null, error: 'Invalid email or password' };
   },
 
   async getProfile(userId: string): Promise<Profile | null> {
@@ -270,105 +283,139 @@ export const db = {
   // -----------------------------------------------------------------------
   async getMeetings(userId: string, role: string): Promise<Meeting[]> {
     if (useSupabase(userId) && supabase) {
-      let query = supabase.from('meetings').select('*');
-      if (role !== 'admin') {
-        query = query.eq('employee_id', userId);
+      try {
+        let query = supabase.from('meetings').select('*');
+        if (role !== 'admin' && userId) {
+          query = query.eq('employee_id', userId);
+        }
+        const { data, error } = await query.order('meeting_date', { ascending: false });
+        if (!error && data) {
+          const mockDb = getMockDB();
+          const mockMeetings = (role === 'admin' || !userId)
+            ? mockDb.meetings
+            : mockDb.meetings.filter(m => m.employee_id === userId);
+          const existingIds = new Set(data.map(m => m.id));
+          const extra = mockMeetings.filter(m => !existingIds.has(m.id));
+          return [...data, ...extra];
+        }
+      } catch (e) {
+        console.warn('[DB] Supabase getMeetings failed, falling back to local DB:', e);
       }
-      const { data, error } = await query.order('meeting_date', { ascending: false });
-      if (error) return [];
-      return data || [];
-    } else {
-      const mockDb = getMockDB();
-      if (role === 'admin') {
-        return mockDb.meetings;
-      }
-      return mockDb.meetings.filter(m => m.employee_id === userId);
     }
+    const mockDb = getMockDB();
+    if (role === 'admin' || !userId) {
+      return mockDb.meetings;
+    }
+    return mockDb.meetings.filter(m => m.employee_id === userId);
   },
 
   async getMeeting(meetingId: string): Promise<Meeting | null> {
     if (useSupabase(meetingId) && supabase) {
-      const { data, error } = await supabase
-        .from('meetings')
-        .select('*')
-        .eq('id', meetingId)
-        .single();
-      if (error) return null;
-      return data;
-    } else {
-      const mockDb = getMockDB();
-      return mockDb.meetings.find(m => m.id === meetingId) || null;
+      try {
+        const { data, error } = await supabase
+          .from('meetings')
+          .select('*')
+          .eq('id', meetingId)
+          .single();
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('[DB] Supabase getMeeting failed:', e);
+      }
     }
+    const mockDb = getMockDB();
+    return mockDb.meetings.find(m => m.id === meetingId) || null;
   },
 
   async createMeeting(meeting: Omit<Meeting, 'id' | 'created_at' | 'feedback_sent' | 'followup_sent' | 'feedback_reminder_sent' | 'followup_reminder_sent'>): Promise<Meeting | null> {
+    const defaultPayload = {
+      ...meeting,
+      platform: meeting.platform || 'Google Meet',
+      status: meeting.status || 'Scheduled',
+      feedback_sent: false,
+      followup_sent: false,
+      feedback_reminder_sent: false,
+      followup_reminder_sent: false
+    };
+
     if (useSupabase(meeting.employee_id) && supabase) {
-      const { data, error } = await supabase
-        .from('meetings')
-        .insert({
-          ...meeting,
-          feedback_sent: false,
-          followup_sent: false,
-          feedback_reminder_sent: false,
-          followup_reminder_sent: false
-        })
-        .select()
-        .single();
-      if (error) return null;
-      return data;
-    } else {
-      const mockDb = getMockDB();
-      const newMeeting: Meeting = {
-        ...meeting,
-        id: genId('meet'),
-        feedback_sent: false,
-        followup_sent: false,
-        feedback_reminder_sent: false,
-        followup_reminder_sent: false,
-        created_at: new Date().toISOString()
-      };
-      mockDb.meetings.push(newMeeting);
-      saveMockDB(mockDb);
-      return newMeeting;
+      try {
+        const { data, error } = await supabase
+          .from('meetings')
+          .insert(defaultPayload)
+          .select()
+          .single();
+        if (!error && data) {
+          // Keep local mock DB in sync as well
+          const mockDb = getMockDB();
+          mockDb.meetings.unshift(data);
+          saveMockDB(mockDb);
+          return data;
+        }
+        console.warn('[DB] Supabase createMeeting insert error, falling back to local DB:', error?.message);
+      } catch (e) {
+        console.warn('[DB] Supabase createMeeting exception, falling back to local DB:', e);
+      }
     }
+
+    const mockDb = getMockDB();
+    const newMeeting: Meeting = {
+      ...defaultPayload,
+      id: genId('meet'),
+      created_at: new Date().toISOString()
+    };
+    mockDb.meetings.unshift(newMeeting);
+    saveMockDB(mockDb);
+    return newMeeting;
   },
 
   async updateMeeting(meetingId: string, meetingData: Partial<Meeting>): Promise<Meeting | null> {
     if (useSupabase(meetingId) && supabase) {
-      const { data, error } = await supabase
-        .from('meetings')
-        .update(meetingData)
-        .eq('id', meetingId)
-        .select()
-        .single();
-      if (error) return null;
-      return data;
-    } else {
-      const mockDb = getMockDB();
-      const idx = mockDb.meetings.findIndex(m => m.id === meetingId);
-      if (idx === -1) return null;
-      mockDb.meetings[idx] = {
-        ...mockDb.meetings[idx],
-        ...meetingData
-      };
-      saveMockDB(mockDb);
-      return mockDb.meetings[idx];
+      try {
+        const { data, error } = await supabase
+          .from('meetings')
+          .update(meetingData)
+          .eq('id', meetingId)
+          .select()
+          .single();
+        if (!error && data) {
+          const mockDb = getMockDB();
+          const idx = mockDb.meetings.findIndex(m => m.id === meetingId);
+          if (idx !== -1) {
+            mockDb.meetings[idx] = { ...mockDb.meetings[idx], ...meetingData };
+            saveMockDB(mockDb);
+          }
+          return data;
+        }
+      } catch (e) {
+        console.warn('[DB] Supabase updateMeeting error:', e);
+      }
     }
+    const mockDb = getMockDB();
+    const idx = mockDb.meetings.findIndex(m => m.id === meetingId);
+    if (idx === -1) return null;
+    mockDb.meetings[idx] = {
+      ...mockDb.meetings[idx],
+      ...meetingData
+    };
+    saveMockDB(mockDb);
+    return mockDb.meetings[idx];
   },
 
   async deleteMeeting(meetingId: string): Promise<boolean> {
     if (useSupabase(meetingId) && supabase) {
-      const { error } = await supabase
-        .from('meetings')
-        .delete()
-        .eq('id', meetingId);
-      return !error;
-    } else {
-      const mockDb = getMockDB();
-      mockDb.meetings = mockDb.meetings.filter(m => m.id !== meetingId);
-      saveMockDB(mockDb);
-      return true;
+      try {
+        await supabase
+          .from('meetings')
+          .delete()
+          .eq('id', meetingId);
+      } catch (e) {
+        console.warn('[DB] Supabase deleteMeeting error:', e);
+      }
     }
+    const mockDb = getMockDB();
+    mockDb.meetings = mockDb.meetings.filter(m => m.id !== meetingId);
+    saveMockDB(mockDb);
+    return true;
   },
 
   // -----------------------------------------------------------------------

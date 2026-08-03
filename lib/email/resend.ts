@@ -5,6 +5,12 @@ const resendApiKey = process.env.RESEND_API_KEY || '';
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 const SENDER_EMAIL = 'hello@qevn.in';
 
+interface EmailAttachment {
+  filename: string;
+  content: string | Buffer;
+  contentType?: string;
+}
+
 interface EmailPayload {
   to: string;
   subject: string;
@@ -12,6 +18,7 @@ interface EmailPayload {
   clientId?: string;
   employeeId: string;
   template: string;
+  attachments?: EmailAttachment[];
 }
 
 export async function sendEmail({
@@ -20,7 +27,8 @@ export async function sendEmail({
   html,
   clientId,
   employeeId,
-  template
+  template,
+  attachments
 }: EmailPayload): Promise<{ success: boolean; error: string | null }> {
   console.log(`[EMAIL SENDING] Using template: ${template}`);
   console.log(`[EMAIL DETAILS] To: ${to} | Subject: ${subject}`);
@@ -31,12 +39,17 @@ export async function sendEmail({
 
   try {
     if (resend) {
-      const { data, error } = await resend.emails.send({
+      const payload: any = {
         from: `QEVN CRM <${SENDER_EMAIL}>`,
         to,
         subject,
         html,
-      });
+      };
+      if (attachments && attachments.length > 0) {
+        payload.attachments = attachments;
+      }
+
+      const { data, error } = await resend.emails.send(payload);
 
       if (error) {
         status = 'failed';
@@ -48,7 +61,7 @@ export async function sendEmail({
       }
     } else {
       // Mock email delivery success
-      console.log(`[EMAIL MOCK] Resend API key not configured. Mocking success delivery.`);
+      console.log(`[EMAIL MOCK] Resend API key not configured. Mocking success delivery to: ${to}`);
       console.log(`[EMAIL BODY PREVIEW]\n-------------------------\n${html.replace(/<[^>]*>/g, ' ')}\n-------------------------`);
       success = true;
       status = 'mock_delivered';
@@ -144,6 +157,90 @@ export const emailTemplates = {
         <p>You had a meeting yesterday with <b>${companyName}</b>.</p>
         <p>This is a 24-hour reminder to send your follow-up email to proceed with negotiation/deal closure.</p>
         <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/employee/dashboard" style="display: inline-block; padding: 10px 20px; background-color: #6366f1; color: white; text-decoration: none; border-radius: 4px; margin-top: 10px;">Send Follow-up Email</a>
+      </div>
+    `
+  }),
+
+  meetingInvitation: (
+    title: string,
+    date: string,
+    start: string,
+    end: string,
+    timezone: string,
+    link: string,
+    organizerName: string,
+    notes: string,
+    platform: string,
+    attendees: string,
+    gcalUrl?: string,
+    outlookUrl?: string
+  ) => ({
+    subject: `Invitation: ${title} @ ${date} ${start} (${timezone})`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+        <div style="border-bottom: 2px solid #6366f1; padding-bottom: 12px; margin-bottom: 20px;">
+          <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #6366f1;">QEVN CRM Meeting Invitation</span>
+          <h1 style="margin: 6px 0 0 0; font-size: 22px; color: #0f172a;">${title}</h1>
+        </div>
+
+        <p style="font-size: 14px; color: #475569; margin-bottom: 18px;">
+          You have been invited by <strong>${organizerName}</strong> to attend a scheduled video conference meeting.
+        </p>
+
+        <div style="background-color: #f8fafc; border-left: 4px solid #6366f1; padding: 16px; border-radius: 6px; margin: 18px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr>
+              <td style="padding: 6px 0; color: #64748b; width: 120px; font-weight: 600;">Date:</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 700;">${date}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b; font-weight: 600;">Time:</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 700;">${start} - ${end} (${timezone})</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b; font-weight: 600;">Platform:</td>
+              <td style="padding: 6px 0; color: #0f172a;">${platform || 'Google Meet'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b; font-weight: 600;">Organizer:</td>
+              <td style="padding: 6px 0; color: #0f172a;">${organizerName}</td>
+            </tr>
+            ${attendees ? `
+            <tr>
+              <td style="padding: 6px 0; color: #64748b; font-weight: 600;">Attendees:</td>
+              <td style="padding: 6px 0; color: #334155; font-size: 13px;">${attendees}</td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+
+        ${notes ? `
+        <div style="margin: 18px 0;">
+          <h3 style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 6px; letter-spacing: 0.5px;">Agenda / Description</h3>
+          <p style="font-size: 14px; color: #334155; line-height: 1.5; background-color: #f1f5f9; padding: 12px; border-radius: 6px; margin: 0; white-space: pre-line;">${notes}</p>
+        </div>
+        ` : ''}
+
+        ${link ? `
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${link}" target="_blank" style="display: inline-block; padding: 12px 28px; background-color: #6366f1; color: #ffffff; font-weight: 600; text-decoration: none; border-radius: 8px; font-size: 14px;">
+            Join Video Meeting (${platform || 'Google Meet'})
+          </a>
+          <p style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Direct Link: <a href="${link}" style="color: #6366f1;">${link}</a></p>
+        </div>
+        ` : ''}
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 24px; text-align: center;">
+          <p style="font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 10px;">Add to your calendar:</p>
+          <div style="display: flex; justify-content: center; gap: 10px;">
+            ${gcalUrl ? `<a href="${gcalUrl}" target="_blank" style="display: inline-block; padding: 6px 14px; background-color: #4285f4; color: white; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 6px; margin-right: 6px;">Google Calendar</a>` : ''}
+            ${outlookUrl ? `<a href="${outlookUrl}" target="_blank" style="display: inline-block; padding: 6px 14px; background-color: #0078d4; color: white; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 6px;">Outlook Calendar</a>` : ''}
+          </div>
+        </div>
+
+        <footer style="margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 12px; font-size: 11px; color: #94a3b8; text-align: center;">
+          Automated invitation sent by QEVN CRM Client Management System • hello@qevn.in
+        </footer>
       </div>
     `
   })

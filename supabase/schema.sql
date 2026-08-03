@@ -48,6 +48,8 @@ create table if not exists public.meetings (
   employee_id uuid not null references public.profiles(id) on delete cascade,
   meeting_title text not null,
   meeting_link text,
+  platform text default 'Google Meet',
+  status text check (status in ('Scheduled', 'Completed', 'Cancelled', 'Rescheduled')) default 'Scheduled',
   meeting_date date not null,
   meeting_start time not null,
   meeting_end time not null,

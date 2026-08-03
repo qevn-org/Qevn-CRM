@@ -55,6 +55,8 @@ export interface Meeting {
   employee_id: string;
   meeting_title: string;
   meeting_link?: string;
+  platform?: string;
+  status?: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled';
   meeting_date: string;
   meeting_start: string;
   meeting_end: string;
@@ -240,12 +242,15 @@ const DEFAULT_DB: MockSchema = {
       employee_id: 'usr_emp_1',
       meeting_title: 'Introductory Discovery Call - Decathlon',
       meeting_link: 'https://meet.google.com/abc-defg-hij',
+      platform: 'Google Meet',
+      status: 'Scheduled',
       meeting_date: '2026-08-05',
       meeting_start: '14:00',
       meeting_end: '14:45',
       timezone: 'Asia/Kolkata',
       calendar_event_id: 'gcal_event_decathlon_1',
       meeting_notes: 'Walkthrough of QEVN client follow-up system.',
+      attendees: 'marc.dubois@decathlon.com, employee@qevn.in',
       feedback_sent: false,
       followup_sent: false,
       feedback_reminder_sent: false,

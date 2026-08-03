@@ -74,31 +74,134 @@ async function getValidToken(employeeId: string, provider: 'google'): Promise<st
 }
 
 // -------------------------------------------------------------------------
+// HELPER UTILITIES: LINK & ICS GENERATORS
+// -------------------------------------------------------------------------
+export function generateMeetingLink(platform: string = 'Google Meet'): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz';
+  const randStr = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const randNum = (len: number) => Array.from({ length: len }, () => Math.floor(Math.random() * 10)).join('');
+
+  const plat = (platform || '').toLowerCase();
+  if (plat.includes('teams')) {
+    return `https://teams.microsoft.com/l/meetup-join/19:meeting_${randStr(16)}@thread.v2/0`;
+  } else if (plat.includes('zoom')) {
+    return `https://zoom.us/j/${randNum(10)}`;
+  } else if (plat.includes('webex')) {
+    return `https://qevn.webex.com/qevn/j.php?MTID=m${randStr(16)}`;
+  } else if (plat.includes('phone') || plat.includes('person')) {
+    return '';
+  }
+  // Default: Google Meet format https://meet.google.com/abc-defg-hij
+  return `https://meet.google.com/${randStr(3)}-${randStr(4)}-${randStr(3)}`;
+}
+
+export function formatDateTimeICS(dateStr: string, timeStr: string): string {
+  // dateStr: "YYYY-MM-DD", timeStr: "HH:mm"
+  const cleanDate = dateStr.replace(/-/g, '');
+  const cleanTime = timeStr.replace(/:/g, '') + '00';
+  return `${cleanDate}T${cleanTime}`;
+}
+
+export function generateICSContent(meeting: Meeting, organizerName: string = 'QEVN CRM', organizerEmail: string = 'hello@qevn.in'): string {
+  const dtStart = formatDateTimeICS(meeting.meeting_date, meeting.meeting_start);
+  const dtEnd = formatDateTimeICS(meeting.meeting_date, meeting.meeting_end);
+  const dtStamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const uid = `meet_${meeting.id}_${Date.now()}@qevn.in`;
+
+  const attendeesList = (meeting.attendees || '')
+    .split(',')
+    .map(e => e.trim())
+    .filter(Boolean);
+
+  let attendeeLines = '';
+  attendeesList.forEach(email => {
+    attendeeLines += `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN=${email}:mailto:${email}\r\n`;
+  });
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//QEVN CRM//Meeting Scheduler//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${dtStamp}`,
+    `DTSTART;TZID=${meeting.timezone || 'UTC'}:${dtStart}`,
+    `DTEND;TZID=${meeting.timezone || 'UTC'}:${dtEnd}`,
+    `SUMMARY:${meeting.meeting_title}`,
+    `DESCRIPTION:${(meeting.meeting_notes || 'Scheduled via QEVN CRM').replace(/\n/g, '\\n')}`,
+    `LOCATION:${meeting.meeting_link || 'Online Video Call'}`,
+    `ORGANIZER;CN=${organizerName}:mailto:${organizerEmail}`,
+    attendeeLines.trim(),
+    'STATUS:CONFIRMED',
+    'SEQUENCE:0',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].filter(Boolean).join('\r\n');
+}
+
+export function generateGoogleCalendarAddUrl(meeting: Meeting): string {
+  const dtStart = `${meeting.meeting_date.replace(/-/g, '')}T${meeting.meeting_start.replace(/:/g, '')}00`;
+  const dtEnd = `${meeting.meeting_date.replace(/-/g, '')}T${meeting.meeting_end.replace(/:/g, '')}00`;
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: meeting.meeting_title,
+    dates: `${dtStart}/${dtEnd}`,
+    details: meeting.meeting_notes || 'Scheduled via QEVN CRM',
+    location: meeting.meeting_link || '',
+    ctz: meeting.timezone || 'Asia/Kolkata',
+    add: meeting.attendees || ''
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+export function generateOutlookCalendarAddUrl(meeting: Meeting): string {
+  const startISO = `${meeting.meeting_date}T${meeting.meeting_start}:00`;
+  const endISO = `${meeting.meeting_date}T${meeting.meeting_end}:00`;
+
+  const params = new URLSearchParams({
+    path: '/calendar/action/compose',
+    rru: 'addevent',
+    subject: meeting.meeting_title,
+    startdt: startISO,
+    enddt: endISO,
+    body: meeting.meeting_notes || 'Scheduled via QEVN CRM',
+    location: meeting.meeting_link || '',
+    to: meeting.attendees || ''
+  });
+
+  return `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
+}
+
+// -------------------------------------------------------------------------
 // MAIN SYNC SERVICE
 // -------------------------------------------------------------------------
 export const calendarService = {
   async syncMeetingToCalendar(meeting: Meeting, employeeId: string): Promise<{ calendarEventId: string; meetingLink?: string } | null> {
+    // If meeting link is not provided or blank, generate automatically
+    const generatedLink = meeting.meeting_link || generateMeetingLink(meeting.platform || 'Google Meet');
+
     const integrations = await db.getCalendarIntegrations(employeeId);
-    // Find Google integration
     const integration = integrations.find(i => i.provider === 'google');
     if (!integration) {
-      console.log(`[CALENDAR SYNC] No Google Calendar integration found for employee: ${employeeId}. Mocking event.`);
-      return { calendarEventId: `mock_${meeting.id}_gcal` };
+      console.log(`[CALENDAR SYNC] No Google Calendar integration found for employee: ${employeeId}. Auto-generated link: ${generatedLink}`);
+      return { calendarEventId: `mock_${meeting.id}_gcal`, meetingLink: generatedLink };
     }
 
     const token = await getValidToken(employeeId, 'google');
-    if (!token) return { calendarEventId: `mock_${meeting.id}_gcal` };
+    if (!token) return { calendarEventId: `mock_${meeting.id}_gcal`, meetingLink: generatedLink };
 
     const eventStart = `${meeting.meeting_date}T${meeting.meeting_start}:00`;
     const eventEnd = `${meeting.meeting_date}T${meeting.meeting_end}:00`;
 
     try {
-      // Parse guest emails from attendees list
       const attendeesList = meeting.attendees
         ? meeting.attendees.split(',').map(email => ({ email: email.trim() })).filter(e => e.email.length > 0)
         : [];
 
-      // Google Calendar API Sync
       const eventPayload: any = {
         summary: meeting.meeting_title,
         description: meeting.meeting_notes || 'Scheduled via QEVN CRM',
@@ -115,12 +218,10 @@ export const calendarService = {
         }
       };
 
-      if (meeting.meeting_link) {
-        eventPayload.location = meeting.meeting_link;
+      if (generatedLink) {
+        eventPayload.location = generatedLink;
       }
 
-      // Add conferenceDataVersion=1 to enable Google Meet generation
-      // Add sendUpdates=all to automatically send calendar invite notifications to all guests
       const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all', {
         method: 'POST',
         headers: {
@@ -133,9 +234,7 @@ export const calendarService = {
       if (res.ok) {
         const data = await res.json();
         console.log('[CALENDAR SYNC] Successfully synced to Google Calendar:', data.id);
-        
-        // Extract the generated Google Meet link
-        const meetingLink = data.hangoutLink || (data.conferenceData?.entryPoints?.[0]?.uri) || undefined;
+        const meetingLink = data.hangoutLink || (data.conferenceData?.entryPoints?.[0]?.uri) || generatedLink;
         return { calendarEventId: data.id, meetingLink };
       } else {
         console.error('[CALENDAR SYNC] Google Calendar API error:', await res.text());
@@ -144,7 +243,7 @@ export const calendarService = {
       console.error('[CALENDAR SYNC] Failed syncing event to Google:', err);
     }
 
-    return { calendarEventId: `mock_${meeting.id}_gcal` };
+    return { calendarEventId: `mock_${meeting.id}_gcal`, meetingLink: generatedLink };
   },
 
   async updateMeetingInCalendar(meeting: Meeting, employeeId: string): Promise<boolean> {
