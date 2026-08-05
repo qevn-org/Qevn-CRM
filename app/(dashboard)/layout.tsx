@@ -10,7 +10,8 @@ import { useRouter } from 'next/navigation';
 import { DialerProvider } from '@/components/dialer/dialer-context';
 import { Softphone } from '@/components/dialer/softphone';
 import { Loader2 } from 'lucide-react';
-import { logAuth, redirectToLogin } from '@/lib/auth/auth-guard';
+import { db } from '@/lib/db';
+import { logAuth, redirectToLogin, getAuthCookie } from '@/lib/auth/auth-guard';
 
 export default function DashboardLayout({
   children,
@@ -18,12 +19,31 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, sidebarOpen, theme, hasHydrated } = useStore();
+  const { user, setUser, sidebarOpen, theme, hasHydrated } = useStore();
 
   useEffect(() => {
-    // 1. Hardened Session Redirect
+    // 1. Session Evaluation & Auto-Restoration
     if (hasHydrated && !user) {
-      logAuth('No active user profile in store after hydration. Triggering hard redirect.');
+      const cookieUserId = getAuthCookie();
+
+      if (cookieUserId && cookieUserId !== 'supabase_session_active') {
+        logAuth(`Found auth cookie for ${cookieUserId}. Attempting session restoration.`);
+        db.getProfile(cookieUserId).then((profile) => {
+          if (profile && profile.status !== 'disabled') {
+            logAuth(`Restored profile for ${profile.name} (${profile.role})`);
+            setUser(profile);
+          } else {
+            logAuth('Profile restoration failed or user disabled. Redirecting to login.');
+            redirectToLogin('invalid_cookie_user');
+          }
+        }).catch((err) => {
+          console.error('[AUTH_GUARD] Failed to restore session from cookie:', err);
+          redirectToLogin('session_restoration_error');
+        });
+        return;
+      }
+
+      logAuth('No active user profile in store or cookies after hydration. Triggering hard redirect.');
       redirectToLogin('unauthenticated_dashboard_access');
 
       // Failover timer to force browser navigation if App Router soft navigation stalls

@@ -81,15 +81,14 @@ export async function proxy(request: NextRequest) {
 
   const isAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname);
 
-  // If not logged in and trying to access dashboard pages, redirect to login
-  if (!userId && !isAuthPage && pathname !== '/') {
-    return redirect('/login');
+  // Allow auth pages (/login, /signup, etc.) to render on client so client store determines redirection without looping
+  if (isAuthPage) {
+    return supabaseResponse;
   }
 
-  // If logged in and trying to access auth pages, redirect to dashboard
-  if (userId && isAuthPage) {
-    const dashboardUrl = userRole === 'admin' ? '/admin/dashboard' : '/employee/dashboard';
-    return redirect(dashboardUrl);
+  // If not logged in and trying to access protected dashboard pages, redirect to login
+  if (!userId && pathname !== '/') {
+    return redirect('/login');
   }
 
   // Enforce Admin RBAC

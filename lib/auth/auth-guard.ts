@@ -49,20 +49,33 @@ export function redirectToLogin(reason: string = 'unauthenticated') {
 export function purgeClientSession() {
   logAuth('Purging all client session storage and cookies');
   if (typeof document !== 'undefined') {
-    const expireStr = '=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
     const domain = window.location.hostname;
-    
-    // Clear cookies across paths and subdomains
-    document.cookie = `qevn_user_id${expireStr}`;
-    document.cookie = `qevn_role${expireStr}`;
-    document.cookie = `qevn_user_id${expireStr}; domain=${domain}`;
-    document.cookie = `qevn_role${expireStr}; domain=${domain}`;
+    const parentDomain = domain.includes('.') ? '.' + domain.split('.').slice(-2).join('.') : domain;
 
-    if (domain.includes('.')) {
-      const parentDomain = '.' + domain.split('.').slice(-2).join('.');
-      document.cookie = `qevn_user_id${expireStr}; domain=${parentDomain}`;
-      document.cookie = `qevn_role${expireStr}; domain=${parentDomain}`;
-    }
+    const cookieNames = ['qevn_user_id', 'qevn_role'];
+    
+    // Extract any Supabase or session cookies from document.cookie
+    document.cookie.split(';').forEach((c) => {
+      const name = c.split('=')[0].trim();
+      if (name) cookieNames.push(name);
+    });
+
+    const uniqueNames = Array.from(new Set(cookieNames));
+
+    const paths = ['/', '/admin', '/employee', '/login'];
+    const domains = ['', domain, parentDomain];
+
+    uniqueNames.forEach((name) => {
+      paths.forEach((path) => {
+        domains.forEach((dom) => {
+          let cookieStr = `${name}=; path=${path}; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax`;
+          if (dom) {
+            cookieStr += `; domain=${dom}`;
+          }
+          document.cookie = cookieStr;
+        });
+      });
+    });
   }
 
   if (typeof window !== 'undefined') {
