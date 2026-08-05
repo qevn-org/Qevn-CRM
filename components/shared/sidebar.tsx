@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store/use-store';
+import { db } from '@/lib/db';
 import { showToast } from '@/components/ui/toast';
 import {
   LayoutDashboard,
@@ -26,19 +27,21 @@ export const Sidebar: React.FC = () => {
   const router = useRouter();
   const { user, setUser, sidebarOpen, toggleSidebar, theme, setTheme } = useStore();
 
-  const handleLogout = () => {
-    // Clear cookies for mock mode
-    if (typeof document !== 'undefined') {
-      document.cookie = 'qevn_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-      document.cookie = 'qevn_role=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+  const handleLogout = async () => {
+    try {
+      await db.logout();
+    } catch (e) {
+      console.error(e);
     }
     
-    // Clear Zustand store
     setUser(null);
     showToast('Logged out successfully', 'success');
     
-    // Redirect to login
-    router.push('/login');
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    } else {
+      router.push('/login');
+    }
   };
 
   if (!user) return null;

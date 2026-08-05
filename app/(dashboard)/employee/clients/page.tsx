@@ -15,9 +15,10 @@ import { Dialog } from '@/components/ui/dialog';
 import { showToast } from '@/components/ui/toast';
 import { 
   Plus, Search, Download, Edit3, Trash2, Archive, 
-  ExternalLink, Building2, User, Mail, Tag 
+  ExternalLink, Building2, User, Mail, Tag, FileSpreadsheet, UploadCloud 
 } from 'lucide-react';
 import Link from 'next/link';
+import { ImportModal } from '@/components/import/import-modal';
 
 // Component inside suspense boundary to handle Search Params correctly
 function ClientsContent() {
@@ -37,6 +38,7 @@ function ClientsContent() {
 
   // Dialog States
   const [modalOpen, setModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
 
   // Form Fields
@@ -284,6 +286,9 @@ function ClientsContent() {
           <p className="text-sm text-muted-foreground mt-1">Manage, filter, and review client relationships in your catalog.</p>
         </div>
         <div className="flex space-x-2">
+          <Button variant="outline" className="flex items-center" onClick={() => setImportModalOpen(true)}>
+            <UploadCloud className="mr-2 h-4 w-4 text-primary" /> Import Data
+          </Button>
           <Button variant="outline" className="flex items-center" onClick={handleExportCSV}>
             <Download className="mr-2 h-4 w-4" /> Export CSV
           </Button>
@@ -556,6 +561,13 @@ function ClientsContent() {
           </div>
         </form>
       </Dialog>
+
+      {/* Bulk Data Import Modal */}
+      <ImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onSuccess={fetchClients}
+      />
     </div>
   );
 }

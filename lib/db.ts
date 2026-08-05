@@ -66,6 +66,33 @@ export const db = {
     return { profile: null, error: 'Invalid email or password' };
   },
 
+  async logout(): Promise<boolean> {
+    try {
+      if (isSupabaseConfigured() && supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (e) {
+      console.error('Error signing out from Supabase:', e);
+    }
+    if (typeof document !== 'undefined') {
+      document.cookie = 'qevn_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
+      document.cookie = 'qevn_role=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+      } catch (e) {
+        console.error('Error clearing auth storage:', e);
+      }
+    }
+    return true;
+  },
+
   async getProfile(userId: string): Promise<Profile | null> {
     if (useSupabase(userId) && supabase) {
       const { data, error } = await supabase
@@ -278,6 +305,129 @@ export const db = {
       saveMockDB(mockDb);
       return true;
     }
+  },
+
+  async bulkImportRecords(
+    employeeId: string,
+    target: 'Leads' | 'Contacts' | 'Clients' | 'Companies',
+    records: Array<{
+      client_name: string;
+      company_name: string;
+      email?: string;
+      phone?: string;
+      designation?: string;
+      website?: string;
+      linkedin?: string;
+      industry?: string;
+      city?: string;
+      country?: string;
+      lead_source?: string;
+      status?: Client['status'];
+      priority?: 'Low' | 'Medium' | 'High';
+      notes?: string;
+    }>,
+    duplicateAction: 'skip' | 'update' | 'create',
+    duplicateCheckFields: Array<'email' | 'phone' | 'company'>
+  ): Promise<{
+    totalProcessed: number;
+    imported: number;
+    updated: number;
+    skipped: number;
+    failed: number;
+    errors: Array<{ row: number; reason: string }>;
+  }> {
+    let defaultStatus: Client['status'] = 'Lead';
+    if (target === 'Contacts') defaultStatus = 'Contacted';
+    if (target === 'Clients') defaultStatus = 'Won';
+    if (target === 'Companies') defaultStatus = 'Lead';
+
+    const result = {
+      totalProcessed: records.length,
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      errors: [] as Array<{ row: number; reason: string }>
+    };
+
+    const mockDb = getMockDB();
+    const existingClients = mockDb.clients;
+
+    for (let i = 0; i < records.length; i++) {
+      const rec = records[i];
+      const rowNum = i + 1;
+
+      try {
+        let existing: Client | undefined = undefined;
+
+        if (duplicateCheckFields.includes('email') && rec.email?.trim()) {
+          existing = existingClients.find(c => c.email && c.email.toLowerCase() === rec.email?.toLowerCase().trim());
+        }
+        if (!existing && duplicateCheckFields.includes('phone') && rec.phone?.trim()) {
+          existing = existingClients.find(c => c.phone && c.phone.trim() === rec.phone?.trim());
+        }
+        if (!existing && duplicateCheckFields.includes('company') && rec.company_name?.trim()) {
+          existing = existingClients.find(c => c.company_name && c.company_name.toLowerCase() === rec.company_name?.toLowerCase().trim());
+        }
+
+        if (existing) {
+          if (duplicateAction === 'skip') {
+            result.skipped++;
+            continue;
+          } else if (duplicateAction === 'update') {
+            const updatedData: Partial<Client> = {
+              client_name: rec.client_name || existing.client_name,
+              company_name: rec.company_name || existing.company_name,
+              email: rec.email || existing.email,
+              phone: rec.phone || existing.phone,
+              designation: rec.designation || existing.designation,
+              website: rec.website || existing.website,
+              linkedin: rec.linkedin || existing.linkedin,
+              industry: rec.industry || existing.industry,
+              city: rec.city || existing.city,
+              country: rec.country || existing.country,
+              lead_source: rec.lead_source || existing.lead_source,
+              notes: rec.notes ? `${existing.notes ? existing.notes + '\n' : ''}${rec.notes}` : existing.notes
+            };
+
+            await this.updateClient(existing.id, updatedData);
+            result.updated++;
+            continue;
+          }
+        }
+
+        const newRecordData: Omit<Client, 'id' | 'created_at' | 'archived'> = {
+          employee_id: employeeId,
+          client_name: rec.client_name || rec.company_name || 'Imported Contact',
+          company_name: rec.company_name || 'N/A',
+          designation: rec.designation || '',
+          email: rec.email || '',
+          phone: rec.phone || '',
+          website: rec.website || '',
+          linkedin: rec.linkedin || '',
+          industry: rec.industry || '',
+          city: rec.city || '',
+          country: rec.country || '',
+          lead_source: rec.lead_source || 'Import',
+          status: rec.status || defaultStatus,
+          priority: rec.priority || 'Medium',
+          notes: rec.notes || ''
+        };
+
+        const created = await this.createClient(newRecordData);
+        if (created) {
+          result.imported++;
+        } else {
+          result.failed++;
+          result.errors.push({ row: rowNum, reason: 'Failed to create record in database' });
+        }
+      } catch (err: any) {
+        result.failed++;
+        result.errors.push({ row: rowNum, reason: err.message || 'Unknown import error' });
+      }
+    }
+
+    return result;
   },
 
   // -----------------------------------------------------------------------

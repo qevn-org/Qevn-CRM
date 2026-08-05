@@ -7,9 +7,9 @@ import { CommandPalette } from '@/components/shared/cmd-k';
 import { ToastContainer } from '@/components/ui/toast';
 import { useStore } from '@/lib/store/use-store';
 import { useRouter } from 'next/navigation';
-
 import { DialerProvider } from '@/components/dialer/dialer-context';
 import { Softphone } from '@/components/dialer/softphone';
+import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({
   children,
@@ -17,15 +17,15 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, sidebarOpen, theme } = useStore();
+  const { user, sidebarOpen, theme, hasHydrated } = useStore();
 
   useEffect(() => {
-    // If not logged in, redirect to login
-    if (!user) {
-      router.push('/login');
+    // Only evaluate redirect after store hydration finishes
+    if (hasHydrated && !user) {
+      router.replace('/login');
     }
     
-    // Set theme class on initial mount
+    // Set theme class on mount / update
     if (typeof document !== 'undefined') {
       const root = document.documentElement;
       if (theme === 'light') {
@@ -36,9 +36,34 @@ export default function DashboardLayout({
         root.classList.remove('light');
       }
     }
-  }, [user, router, theme]);
+  }, [user, hasHydrated, router, theme]);
 
-  if (!user) return null;
+  // Loading state during hydration or auth check
+  if (!hasHydrated || !user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
+        <div className="flex flex-col items-center space-y-4 max-w-sm text-center">
+          <div className="relative flex items-center justify-center">
+            <div className="absolute inset-0 rounded-2xl bg-primary/20 blur-xl animate-pulse" />
+            <img
+              src="/logo.png"
+              alt="QEVN Logo"
+              className="relative h-14 w-14 rounded-2xl object-contain bg-card p-1.5 shadow-lg border border-border/40"
+            />
+          </div>
+          <div className="flex items-center space-x-2 text-primary font-medium text-sm pt-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>{!hasHydrated ? 'Loading CRM session...' : 'Redirecting to login...'}</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {!hasHydrated
+              ? 'Verifying authentication credentials'
+              : 'No active session found. Redirecting to sign in.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <DialerProvider>
@@ -69,3 +94,4 @@ export default function DashboardLayout({
     </DialerProvider>
   );
 }
+

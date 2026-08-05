@@ -11,10 +11,21 @@ export interface NotificationItem {
   timestamp: string;
 }
 
+export interface ImportMappingTemplate {
+  id: string;
+  name: string;
+  target: 'Leads' | 'Contacts' | 'Clients' | 'Companies';
+  mapping: Record<string, string>;
+  createdAt: string;
+}
+
 interface AppState {
   user: Profile | null;
   setUser: (user: Profile | null) => void;
   
+  hasHydrated: boolean;
+  setHasHydrated: (hydrated: boolean) => void;
+
   notifications: NotificationItem[];
   addNotification: (notification: Omit<NotificationItem, 'id' | 'read' | 'timestamp'>) => void;
   markNotificationRead: (id: string) => void;
@@ -25,6 +36,10 @@ interface AppState {
   
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
+
+  importTemplates: ImportMappingTemplate[];
+  saveImportTemplate: (template: Omit<ImportMappingTemplate, 'id' | 'createdAt'>) => void;
+  deleteImportTemplate: (id: string) => void;
 }
 
 const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
@@ -44,6 +59,9 @@ export const useStore = create<AppState>()(
       user: null,
       setUser: (user) => set({ user }),
       
+      hasHydrated: false,
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+
       notifications: DEFAULT_NOTIFICATIONS,
       addNotification: (notif) => set((state) => ({
         notifications: [
@@ -70,7 +88,6 @@ export const useStore = create<AppState>()(
       
       theme: 'dark',
       setTheme: (theme) => {
-        // Handle side-effects on document elements
         if (typeof document !== 'undefined') {
           const root = document.documentElement;
           if (theme === 'light') {
@@ -82,15 +99,37 @@ export const useStore = create<AppState>()(
           }
         }
         set({ theme });
-      }
+      },
+
+      importTemplates: [],
+      saveImportTemplate: (tmpl) => set((state) => {
+        const newTmpl: ImportMappingTemplate = {
+          ...tmpl,
+          id: `tmpl_${Math.random().toString(36).substring(2, 9)}`,
+          createdAt: new Date().toISOString()
+        };
+        // Replace existing template with same name or add new
+        const filtered = state.importTemplates.filter(t => t.name.toLowerCase() !== tmpl.name.toLowerCase());
+        return { importTemplates: [...filtered, newTmpl] };
+      }),
+      deleteImportTemplate: (id) => set((state) => ({
+        importTemplates: state.importTemplates.filter((t) => t.id !== id)
+      }))
     }),
     {
       name: 'qevn-crm-store',
       partialize: (state) => ({
         user: state.user,
         theme: state.theme,
-        notifications: state.notifications
-      })
+        notifications: state.notifications,
+        importTemplates: state.importTemplates
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.setHasHydrated(true);
+        }
+      }
     }
   )
 );
+

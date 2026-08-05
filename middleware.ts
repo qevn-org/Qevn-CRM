@@ -5,7 +5,7 @@ import { createServerClient } from '@supabase/ssr';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Bypass public assets and auth pages to prevent redirects
+  // Bypass public assets and auth API pages to prevent redirects
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth') ||
@@ -28,28 +28,42 @@ export async function middleware(request: NextRequest) {
   let userRole: string | null = null;
 
   if (isSupabase) {
-    const supabaseServer = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll().map((c) => ({ name: c.name, value: c.value }));
+    try {
+      const supabaseServer = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll().map((c) => ({ name: c.name, value: c.value }));
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              request.cookies.set({ name, value, ...options });
+              supabaseResponse.cookies.set({ name, value, ...options });
+            });
+          },
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set({ name, value, ...options });
-            supabaseResponse.cookies.set({ name, value, ...options });
-          });
-        },
-      },
-    });
+      });
 
-    const { data: { session } } = await supabaseServer.auth.getSession();
-    if (session?.user) {
-      userId = session.user.id;
-      userRole = session.user.user_metadata?.role || 'employee';
+      const { data: { session } } = await supabaseServer.auth.getSession();
+      if (session?.user) {
+        userId = session.user.id;
+        userRole = session.user.user_metadata?.role || 'employee';
+      }
+    } catch (e) {
+      console.error('Middleware Supabase auth session check failed:', e);
     }
   }
 
-  // Helper to perform redirects while preserving response cookies (critical for @supabase/ssr session syncing)
+  // Fallback to cookie check for demo / mock mode
+  if (!userId) {
+    const qevnUserId = request.cookies.get('qevn_user_id')?.value;
+    const qevnRole = request.cookies.get('qevn_role')?.value;
+    if (qevnUserId) {
+      userId = qevnUserId;
+      userRole = qevnRole || 'employee';
+    }
+  }
+
+  // Helper to perform redirects while preserving response cookies (critical for session syncing)
   const redirect = (url: string) => {
     const redirectResponse = NextResponse.redirect(new URL(url, request.url));
     supabaseResponse.cookies.getAll().forEach((cookie) => {

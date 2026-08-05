@@ -4,14 +4,16 @@ import React, { useState } from 'react';
 import { useStore } from '@/lib/store/use-store';
 import { DropdownMenu, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { useDialer } from '@/components/dialer/dialer-context';
-import { Bell, Search, User, CheckCheck, Menu, PhoneCall } from 'lucide-react';
+import { Bell, Search, User, CheckCheck, Menu, PhoneCall, UploadCloud } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import { ImportModal } from '@/components/import/import-modal';
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
   const { user, notifications, markNotificationRead, markAllNotificationsRead, toggleSidebar } = useStore();
   const { setIsDialerOpen, callState, callDuration } = useDialer();
   const [bellOpen, setBellOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   if (!user) return null;
 
@@ -148,7 +150,27 @@ export const Header: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Import Data Trigger */}
+        <button
+          onClick={() => setImportModalOpen(true)}
+          className="flex h-9 items-center justify-center rounded-lg border border-border/40 bg-secondary/35 px-3 py-1.5 text-xs text-muted-foreground hover:border-border hover:text-foreground transition-colors cursor-pointer"
+          title="Import Leads / Contacts / Clients / Companies from CSV or Excel"
+        >
+          <UploadCloud className="mr-1.5 h-3.5 w-3.5 text-primary" />
+          <span className="hidden sm:inline font-medium">Import</span>
+        </button>
       </div>
+
+      <ImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onSuccess={() => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('qevn-data-imported'));
+          }
+        }}
+      />
     </header>
   );
 };
