@@ -1,4 +1,5 @@
 import { supabase, supabaseAdmin, isSupabaseConfigured } from './supabase';
+import { logAuth, purgeClientSession } from './auth/auth-guard';
 import { 
   getMockDB, 
   saveMockDB, 
@@ -67,30 +68,33 @@ export const db = {
   },
 
   async logout(): Promise<boolean> {
+    logAuth('Executing complete session logout and cache invalidation');
     try {
       if (isSupabaseConfigured() && supabase) {
         await supabase.auth.signOut();
       }
     } catch (e) {
-      console.error('Error signing out from Supabase:', e);
+      console.error('[AUTH_LOGOUT] Error signing out from Supabase:', e);
     }
-    if (typeof document !== 'undefined') {
-      document.cookie = 'qevn_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
-      document.cookie = 'qevn_role=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
-      try {
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
-            keysToRemove.push(key);
-          }
-        }
-        keysToRemove.forEach(k => localStorage.removeItem(k));
-      } catch (e) {
-        console.error('Error clearing auth storage:', e);
-      }
-    }
+    
+    // Purge cookies, localStorage, and sessionStorage
+    purgeClientSession();
     return true;
+  },
+
+  async validateSession(userId: string): Promise<{ valid: boolean; profile: Profile | null }> {
+    try {
+      if (!userId) return { valid: false, profile: null };
+      const profile = await this.getProfile(userId);
+      if (!profile || profile.status === 'disabled') {
+        logAuth(`Session validation failed for userId ${userId}: profile disabled or missing`);
+        return { valid: false, profile: null };
+      }
+      return { valid: true, profile };
+    } catch (e) {
+      console.error('[AUTH_VALIDATION] Exception during session validation:', e);
+      return { valid: false, profile: null };
+    }
   },
 
   async getProfile(userId: string): Promise<Profile | null> {

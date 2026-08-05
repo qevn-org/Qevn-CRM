@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Bypass public assets and auth API pages to prevent redirects
@@ -49,7 +49,7 @@ export async function middleware(request: NextRequest) {
         userRole = session.user.user_metadata?.role || 'employee';
       }
     } catch (e) {
-      console.error('Middleware Supabase auth session check failed:', e);
+      console.error('[PROXY] Supabase auth session check failed:', e);
     }
   }
 

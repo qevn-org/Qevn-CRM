@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store/use-store';
 import { db } from '@/lib/db';
 import { showToast } from '@/components/ui/toast';
+import { logAuth, redirectToLogin } from '@/lib/auth/auth-guard';
 import {
   LayoutDashboard,
   Users,
@@ -28,20 +29,16 @@ export const Sidebar: React.FC = () => {
   const { user, setUser, sidebarOpen, toggleSidebar, theme, setTheme } = useStore();
 
   const handleLogout = async () => {
+    logAuth('User clicked Sign Out button');
     try {
       await db.logout();
     } catch (e) {
-      console.error(e);
+      console.error('[AUTH_LOGOUT] Exception in db.logout():', e);
     }
     
     setUser(null);
     showToast('Logged out successfully', 'success');
-    
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login';
-    } else {
-      router.push('/login');
-    }
+    redirectToLogin('user_explicit_logout');
   };
 
   if (!user) return null;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store/use-store';
@@ -9,14 +9,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { showToast } from '@/components/ui/toast';
+import { logAuth } from '@/lib/auth/auth-guard';
 
 export default function LoginPage() {
   const router = useRouter();
-  const setUser = useStore((state) => state.setUser);
+  const { user, setUser, hasHydrated } = useStore();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // If already logged in, redirect away from auth page to dashboard
+  useEffect(() => {
+    if (hasHydrated && user) {
+      logAuth('User already authenticated. Redirecting away from /login to dashboard.');
+      const dest = user.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard';
+      if (typeof window !== 'undefined') {
+        window.location.replace(dest);
+      } else {
+        router.replace(dest);
+      }
+    }
+  }, [user, hasHydrated, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,27 +41,43 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
+      logAuth(`Attempting login for email: ${email}`);
       const { profile, error } = await db.login(email, password);
       
       if (error || !profile) {
+        logAuth(`Login failed for ${email}: ${error}`);
         showToast(error || 'Login failed', 'error');
         return;
       }
 
-      // Success
+      logAuth(`Login success for ${email} (${profile.role})`);
       showToast(`Welcome back, ${profile.name}!`, 'success');
 
-      // Set cookies for middleware checks (mostly for mock mode)
+      // Set cookies for middleware checks
       if (typeof document !== 'undefined') {
-        document.cookie = `qevn_user_id=${profile.id}; path=/; max-age=86400; SameSite=Lax`;
-        document.cookie = `qevn_role=${profile.role}; path=/; max-age=86400; SameSite=Lax`;
+        const domain = window.location.hostname;
+        const cookieOptions = `; path=/; max-age=86400; SameSite=Lax`;
+        
+        document.cookie = `qevn_user_id=${profile.id}${cookieOptions}`;
+        document.cookie = `qevn_role=${profile.role}${cookieOptions}`;
+        document.cookie = `qevn_user_id=${profile.id}${cookieOptions}; domain=${domain}`;
+        document.cookie = `qevn_role=${profile.role}${cookieOptions}; domain=${domain}`;
+
+        if (domain.includes('.')) {
+          const parentDomain = '.' + domain.split('.').slice(-2).join('.');
+          document.cookie = `qevn_user_id=${profile.id}${cookieOptions}; domain=${parentDomain}`;
+          document.cookie = `qevn_role=${profile.role}${cookieOptions}; domain=${parentDomain}`;
+        }
       }
 
-      // Update global Zustand state
       setUser(profile);
 
-      // Routing
-      router.push(profile.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard');
+      const targetDashboard = profile.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard';
+      if (typeof window !== 'undefined') {
+        window.location.replace(targetDashboard);
+      } else {
+        router.push(targetDashboard);
+      }
     } catch (err: any) {
       console.error(err);
       showToast('An unexpected error occurred', 'error');

@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { DialerProvider } from '@/components/dialer/dialer-context';
 import { Softphone } from '@/components/dialer/softphone';
 import { Loader2 } from 'lucide-react';
+import { logAuth, redirectToLogin } from '@/lib/auth/auth-guard';
 
 export default function DashboardLayout({
   children,
@@ -20,12 +21,35 @@ export default function DashboardLayout({
   const { user, sidebarOpen, theme, hasHydrated } = useStore();
 
   useEffect(() => {
-    // Only evaluate redirect after store hydration finishes
+    // 1. Hardened Session Redirect
     if (hasHydrated && !user) {
-      router.replace('/login');
+      logAuth('No active user profile in store after hydration. Triggering hard redirect.');
+      redirectToLogin('unauthenticated_dashboard_access');
+
+      // Failover timer to force browser navigation if App Router soft navigation stalls
+      const failoverTimer = setTimeout(() => {
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          logAuth('Failover timer triggered. Forcing window.location.href');
+          window.location.href = '/login';
+        }
+      }, 300);
+
+      return () => clearTimeout(failoverTimer);
     }
-    
-    // Set theme class on mount / update
+
+    // 2. Handle Browser Back Button (BFCache restore) after logout
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && !useStore.getState().user) {
+        logAuth('Restored from BFCache without active user session. Redirecting to login.');
+        window.location.replace('/login');
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pageshow', handlePageShow);
+    }
+
+    // 3. Set theme class
     if (typeof document !== 'undefined') {
       const root = document.documentElement;
       if (theme === 'light') {
@@ -36,9 +60,26 @@ export default function DashboardLayout({
         root.classList.remove('light');
       }
     }
-  }, [user, hasHydrated, router, theme]);
 
-  // Loading state during hydration or auth check
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pageshow', handlePageShow);
+      }
+    };
+  }, [user, hasHydrated, theme]);
+
+  // Loading state during hydration or auth check (Max 1.5s before forced redirect)
+  useEffect(() => {
+    const maxTimeout = setTimeout(() => {
+      if (!useStore.getState().user) {
+        logAuth('Max hydration loading timeout reached (1.5s). Forcing redirect to login.');
+        redirectToLogin('hydration_timeout');
+      }
+    }, 1500);
+
+    return () => clearTimeout(maxTimeout);
+  }, []);
+
   if (!hasHydrated || !user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
