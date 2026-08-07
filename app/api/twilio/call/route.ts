@@ -60,10 +60,21 @@ export async function POST(request: NextRequest) {
 
     console.log(`[TWILIO CALL API] Placing live Twilio REST call: From ${fromNumber} -> To ${cleanTo}`);
 
-    // TwiML webhook URL with explicit outbound_api flag and employee context
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://crm.qevn.in').replace(/\/$/, '');
-    const twimlUrl = `${appUrl}/api/twilio/voice?type=outbound_api&employeeId=${encodeURIComponent(employeeId || '')}&to=${encodeURIComponent(cleanTo)}`;
-    const statusCallbackUrl = `${appUrl}/api/twilio/status`;
+    function getBaseUrl(): string {
+      const envUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+      const origin = request.nextUrl.origin || '';
+      let raw = envUrl || origin || 'https://crm.qevn.in';
+      try {
+        if (!raw.startsWith('http')) raw = `https://${raw}`;
+        return new URL(raw).origin;
+      } catch (e) {
+        return 'https://crm.qevn.in';
+      }
+    }
+
+    const baseUrl = getBaseUrl();
+    const twimlUrl = `${baseUrl}/api/twilio/voice?type=outbound_api&employeeId=${encodeURIComponent(employeeId || '')}&to=${encodeURIComponent(cleanTo)}`;
+    const statusCallbackUrl = `${baseUrl}/api/twilio/status`;
 
     // 3. Call Twilio REST API: POST /2010-04-01/Accounts/{AccountSid}/Calls.json
     const twilioEndpoint = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls.json`;

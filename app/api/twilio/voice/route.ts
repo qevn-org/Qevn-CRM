@@ -16,6 +16,19 @@ function formatE164(phone: string): string {
   return clean;
 }
 
+function getBaseUrl(request: NextRequest): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  const origin = request.nextUrl.origin || '';
+  let raw = envUrl || origin || 'https://crm.qevn.in';
+  try {
+    if (!raw.startsWith('http')) raw = `https://${raw}`;
+    const parsed = new URL(raw);
+    return parsed.origin; // Guarantees pure origin e.g. "https://crm.qevn.in" with NO paths like /login
+  } catch (e) {
+    return 'https://crm.qevn.in';
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const urlParams = request.nextUrl.searchParams;
@@ -23,7 +36,7 @@ export async function POST(request: NextRequest) {
     try {
       formData = await request.formData();
     } catch (e) {
-      // Body might not be form data (e.g. GET or empty)
+      // Body might not be form data
     }
 
     const type = urlParams.get('type') || formData?.get('type')?.toString() || '';
@@ -34,29 +47,34 @@ export async function POST(request: NextRequest) {
     const To = formatE164(RawTo);
     const callerPhone = process.env.TWILIO_PHONE_NUMBER || '+17167275053';
     const record = formData?.get('Record') === 'true' || urlParams.get('record') === 'true';
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://crm.qevn.in').replace(/\/$/, '');
+    const baseUrl = getBaseUrl(request);
+    const statusCallbackUrl = `${baseUrl}/api/twilio/status`;
 
-    console.log(`[TWILIO VOICE WEBHOOK] Type: "${type}" | Direction: "${Direction}" | From: "${From}" | To: "${To}" | Employee: "${employeeId}"`);
+    console.log(`[TWILIO VOICE WEBHOOK] BaseUrl: "${baseUrl}" | Type: "${type}" | Direction: "${Direction}" | From: "${From}" | To: "${To}" | Employee: "${employeeId}"`);
 
     const voiceResponse = new twilio.twiml.VoiceResponse();
 
     // SCENARIO 1: REST API Call (Outbound Call created via POST /2010-04-01/Accounts/{Sid}/Calls.json)
-    // The recipient answered the phone. DO NOT self-dial To again! Connect recipient to agent client or play greeting.
+    // The recipient answered the phone. Connect recipient to agent client or play greeting with fallback.
     if (type === 'outbound_api' || Direction === 'outbound-api') {
       console.log('[TWILIO VOICE WEBHOOK] Handling REST API outbound call answered by recipient');
+      
+      voiceResponse.say({ voice: 'alice' }, 'Connecting your call to QEVN CRM agent. Please wait.');
       
       if (employeeId) {
         const clientIdentity = `user_${employeeId.replace(/[^\w-]/g, '_')}`;
         console.log(`[TWILIO VOICE WEBHOOK] Bridging answered call to WebRTC client identity: ${clientIdentity}`);
         
-        voiceResponse.say({ voice: 'alice' }, 'Connecting your call to QEVN CRM agent. Please wait.');
         const dial = voiceResponse.dial({
           callerId: callerPhone,
           timeout: 30,
-          action: `${appUrl}/api/twilio/status`,
+          action: statusCallbackUrl,
           method: 'POST'
         });
         dial.client(clientIdentity);
+
+        // Fallback TwiML if agent is not currently online in WebRTC softphone
+        voiceResponse.say({ voice: 'alice' }, 'The agent is currently unavailable to take your call. Thank you for calling QEVN CRM.');
       } else {
         voiceResponse.say({ voice: 'alice' }, 'Thank you for answering. Your call with QEVN CRM is connected.');
       }
@@ -71,7 +89,7 @@ export async function POST(request: NextRequest) {
           callerId: callerPhone,
           record: record ? 'record-from-answer' : 'do-not-record',
           timeout: 30,
-          action: `${appUrl}/api/twilio/status`,
+          action: statusCallbackUrl,
           method: 'POST'
         });
         dial.number(To);
@@ -87,7 +105,7 @@ export async function POST(request: NextRequest) {
           callerId: callerPhone,
           record: record ? 'record-from-answer' : 'do-not-record',
           timeout: 30,
-          action: `${appUrl}/api/twilio/status`,
+          action: statusCallbackUrl,
           method: 'POST'
         });
         dial.number(To);
@@ -123,4 +141,5 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   return POST(request);
 }
+
 
