@@ -5,10 +5,11 @@ import { createServerClient } from '@supabase/ssr';
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Bypass public assets and auth API pages to prevent redirects
+  // Bypass public assets, auth API pages, and Twilio webhooks to prevent redirects
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/twilio') ||
     pathname.startsWith('/favicon.ico') ||
     pathname.includes('.')
   ) {
