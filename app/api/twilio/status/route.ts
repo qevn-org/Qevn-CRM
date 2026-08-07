@@ -71,14 +71,44 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const acceptHeader = request.headers.get('accept') || '';
+    const userAgent = request.headers.get('user-agent') || '';
+    const isTwilioRequest = userAgent.toLowerCase().includes('twilio') || !contentType.includes('application/json');
+
+    if (isTwilioRequest && !acceptHeader.includes('application/json')) {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
+      return new NextResponse(xml, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/xml',
+          'Cache-Control': 'no-cache'
+        }
+      });
+    }
+
     return NextResponse.json({ success: true, callLog });
   } catch (err: any) {
     console.error('[TWILIO STATUS API ERROR]', err);
+    const userAgent = request.headers.get('user-agent') || '';
+    if (userAgent.toLowerCase().includes('twilio')) {
+      return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, {
+        status: 200,
+        headers: { 'Content-Type': 'text/xml' }
+      });
+    }
     return NextResponse.json({ success: false, error: err.message || 'Error logging call status' }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
+  const userAgent = request.headers.get('user-agent') || '';
+  if (userAgent.toLowerCase().includes('twilio')) {
+    return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`, {
+      status: 200,
+      headers: { 'Content-Type': 'text/xml' }
+    });
+  }
   return NextResponse.json({ success: true, message: 'Twilio Status Callback endpoint active' });
 }
+
 
