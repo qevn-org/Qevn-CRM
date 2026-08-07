@@ -1,6 +1,8 @@
 {
-  "name": "client-pipeline",
-  "version": "0.1.0",
+  "name": "qevn-crm-softphone",
+  "version": "1.0.0",
+  "description": "QEVN CRM Softphone Calling Console Application",
+  "author": "QEVN CRM Team",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -9,7 +11,22 @@
     "start": "next start",
     "lint": "eslint",
     "electron": "electron electron/main.js",
-    "build:exe": "npx electron-builder --win nsis"
+    "build:exe": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "in.qevn.crm.softphone",
+    "productName": "QEVN CRM Softphone",
+    "files": [
+      "electron/**/*",
+      "public/**/*"
+    ],
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
@@ -33,6 +50,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
