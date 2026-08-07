@@ -85,6 +85,85 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
   } | null>(null);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const deviceRef = useRef<any>(null);
+  const activeCallRef = useRef<any>(null);
+  const isDeviceReadyRef = useRef<boolean>(false);
+
+  // Initialize Twilio WebRTC Device for softphone calls
+  useEffect(() => {
+    if (!user) return;
+
+    let isSubscribed = true;
+
+    async function initTwilioDevice() {
+      try {
+        console.log('[TWILIO SOFTPHONE] Requesting WebRTC access token...');
+        const res = await fetch('/api/twilio/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId: user?.id || 'usr_emp_1' })
+        });
+        const data = await res.json();
+
+        if (!isSubscribed) return;
+
+        if (data.success && data.token && !data.isMock) {
+          try {
+            console.log('[TWILIO SOFTPHONE] Initializing Twilio WebRTC Voice SDK...');
+            const { Device, Call } = await import('@twilio/voice-sdk');
+
+            const device = new Device(data.token, {
+              logLevel: 1,
+              codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU]
+            });
+
+            device.on('registered', () => {
+              console.log('[TWILIO SOFTPHONE] WebRTC Softphone Registered & Ready!');
+              isDeviceReadyRef.current = true;
+            });
+
+            device.on('error', (err: any) => {
+              console.error('[TWILIO SOFTPHONE ERROR]', err);
+              isDeviceReadyRef.current = false;
+            });
+
+            device.on('incoming', (call: any) => {
+              console.log('[TWILIO SOFTPHONE INCOMING]', call);
+              activeCallRef.current = call;
+              setCallState('incoming');
+              setPhoneNumber(call.parameters?.From || 'Unknown');
+              setIsDialerOpen(true);
+
+              call.on('disconnect', () => {
+                setCallState('ended');
+                setTimeout(() => setCallState('idle'), 1000);
+              });
+            });
+
+            await device.register();
+            deviceRef.current = device;
+          } catch (sdkErr) {
+            console.warn('[TWILIO SOFTPHONE] Browser WebRTC SDK initialization notice:', sdkErr);
+          }
+        } else {
+          console.log('[TWILIO SOFTPHONE] Softphone running in demo/simulator mode.');
+        }
+      } catch (err) {
+        console.error('[TWILIO SOFTPHONE TOKEN ERROR]', err);
+      }
+    }
+
+    initTwilioDevice();
+
+    return () => {
+      isSubscribed = false;
+      if (deviceRef.current) {
+        try {
+          deviceRef.current.destroy();
+        } catch (e) {}
+      }
+    };
+  }, [user]);
 
   // Fetch CRM clients for contact auto-complete search
   useEffect(() => {
@@ -158,32 +237,73 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
     setDtmfString('');
 
     try {
-      showToast(`Initiating Twilio call to ${targetNum}...`, 'info');
+      // 1. Check if Live WebRTC Device is ready in browser
+      if (deviceRef.current && isDeviceReadyRef.current) {
+        showToast(`Placing live WebRTC call to ${targetNum}...`, 'info');
+        console.log(`[TWILIO SOFTPHONE] Connecting WebRTC call to target: ${targetNum}`);
 
-      const res = await fetch('/api/twilio/call', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: targetNum,
-          employeeId: user?.id
-        })
-      });
+        const call = await deviceRef.current.connect({
+          params: {
+            To: targetNum,
+            type: 'softphone',
+            employeeId: user?.id || 'usr_emp_1'
+          }
+        });
 
-      const data = await res.json();
+        activeCallRef.current = call;
 
-      if (data.success) {
-        setCallState('ringing');
-        if (data.to) setPhoneNumber(data.to);
-        showToast(`Calling ${data.to}... Your phone will ring now!`, 'success');
+        call.on('ringing', () => {
+          console.log('[TWILIO SOFTPHONE] Target phone is ringing...');
+          setCallState('ringing');
+          showToast(`Calling ${targetNum}... Recipient phone is ringing!`, 'info');
+        });
 
-        setTimeout(() => {
+        call.on('accept', () => {
+          console.log('[TWILIO SOFTPHONE] Call connected! 2-way WebRTC audio active.');
           setCallState('connected');
-        }, 3000);
+          showToast('Call connected! Microphone active.', 'success');
+        });
+
+        call.on('disconnect', () => {
+          console.log('[TWILIO SOFTPHONE] Call disconnected.');
+          handleCallEnded();
+        });
+
+        call.on('error', (err: any) => {
+          console.error('[TWILIO SOFTPHONE CALL ERROR]', err);
+          showToast(err.message || 'Twilio softphone call error', 'error');
+          handleCallEnded();
+        });
+
       } else {
-        console.error('[DIALER] Twilio Call failed:', data.error);
-        setCallState('ended');
-        showToast(data.error || 'Failed to place call via Twilio', 'error');
-        setTimeout(() => setCallState('idle'), 2000);
+        // 2. Fallback to REST API / Simulator mode
+        showToast(`Initiating call to ${targetNum}...`, 'info');
+
+        const res = await fetch('/api/twilio/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: targetNum,
+            employeeId: user?.id
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          setCallState('ringing');
+          if (data.to) setPhoneNumber(data.to);
+          showToast(`Calling ${data.to}...`, 'success');
+
+          setTimeout(() => {
+            setCallState('connected');
+          }, 3000);
+        } else {
+          console.error('[DIALER] Twilio Call failed:', data.error);
+          setCallState('ended');
+          showToast(data.error || 'Failed to place call via Twilio', 'error');
+          setTimeout(() => setCallState('idle'), 2000);
+        }
       }
     } catch (err: any) {
       console.error('[DIALER] Exception placing call:', err);
@@ -193,14 +313,14 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const endCall = () => {
+  const handleCallEnded = () => {
     const finalDuration = callDuration;
     const finalContact = activeContact;
     const finalNum = phoneNumber;
 
+    activeCallRef.current = null;
     setCallState('ended');
 
-    // Save metadata for Post-Call Notes Modal
     setLastCallData({
       phoneNumber: finalNum,
       contactName: finalContact?.name,
@@ -217,20 +337,49 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
     }, 800);
   };
 
+  const endCall = () => {
+    if (activeCallRef.current) {
+      try {
+        activeCallRef.current.disconnect();
+      } catch (e) {}
+    } else if (deviceRef.current) {
+      try {
+        deviceRef.current.disconnectAll();
+      } catch (e) {}
+    }
+    handleCallEnded();
+  };
+
   const acceptIncomingCall = () => {
+    if (activeCallRef.current) {
+      try {
+        activeCallRef.current.accept();
+      } catch (e) {}
+    }
     setCallState('connected');
     setCallDuration(0);
     showToast('Incoming call accepted', 'success');
   };
 
   const declineIncomingCall = () => {
+    if (activeCallRef.current) {
+      try {
+        activeCallRef.current.reject();
+      } catch (e) {}
+    }
     setCallState('ended');
     setTimeout(() => setCallState('idle'), 600);
   };
 
   const toggleMute = () => {
-    setIsMuted(prev => !prev);
-    showToast(!isMuted ? 'Microphone Muted' : 'Microphone Unmuted', 'info');
+    const newMute = !isMuted;
+    setIsMuted(newMute);
+    if (activeCallRef.current) {
+      try {
+        activeCallRef.current.mute(newMute);
+      } catch (e) {}
+    }
+    showToast(newMute ? 'Microphone Muted' : 'Microphone Unmuted', 'info');
   };
 
   const toggleHold = () => {
@@ -240,6 +389,11 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
 
   const sendDtmf = (digit: string) => {
     setDtmfString(prev => prev + digit);
+    if (activeCallRef.current) {
+      try {
+        activeCallRef.current.sendDigits(digit);
+      } catch (e) {}
+    }
   };
 
   const savePostCallNotes = async (notesData: {
@@ -319,3 +473,4 @@ export function useDialer() {
   }
   return context;
 }
+
