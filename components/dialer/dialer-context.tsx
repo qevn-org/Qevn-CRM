@@ -89,78 +89,77 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
   const activeCallRef = useRef<any>(null);
   const isDeviceReadyRef = useRef<boolean>(false);
 
-  // Initialize Twilio WebRTC Device for softphone calls
-  useEffect(() => {
-    if (!user) return;
-
-    let isSubscribed = true;
-
-    async function initTwilioDevice() {
-      try {
-        console.log('[TWILIO SOFTPHONE] Requesting WebRTC access token...');
-        const res = await fetch('/api/twilio/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employeeId: user?.id || 'usr_emp_1' })
-        });
-        const data = await res.json();
-
-        if (!isSubscribed) return;
-
-        if (data.success && data.token && !data.isMock) {
-          try {
-            console.log('[TWILIO SOFTPHONE] Initializing Twilio WebRTC Voice SDK...');
-            const { Device, Call } = await import('@twilio/voice-sdk');
-
-            const device = new Device(data.token, {
-              logLevel: 1,
-              codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU]
-            });
-
-            device.on('registered', () => {
-              console.log('[TWILIO SOFTPHONE] WebRTC Softphone Registered & Ready!');
-              isDeviceReadyRef.current = true;
-            });
-
-            device.on('error', (err: any) => {
-              console.error('[TWILIO SOFTPHONE ERROR]', err);
-              isDeviceReadyRef.current = false;
-            });
-
-            device.on('incoming', (call: any) => {
-              console.log('[TWILIO SOFTPHONE INCOMING]', call);
-              activeCallRef.current = call;
-              setCallState('incoming');
-              setPhoneNumber(call.parameters?.From || 'Unknown');
-              setIsDialerOpen(true);
-
-              call.on('disconnect', () => {
-                setCallState('ended');
-                setTimeout(() => setCallState('idle'), 1000);
-              });
-            });
-
-            await device.register();
-            deviceRef.current = device;
-          } catch (sdkErr) {
-            console.warn('[TWILIO SOFTPHONE] Browser WebRTC SDK initialization notice:', sdkErr);
-          }
-        } else {
-          console.log('[TWILIO SOFTPHONE] Softphone running in demo/simulator mode.');
-        }
-      } catch (err) {
-        console.error('[TWILIO SOFTPHONE TOKEN ERROR]', err);
-      }
+  // Initialize or ensure Twilio WebRTC Device is ready for computer microphone calls
+  const ensureDeviceReady = async (): Promise<any> => {
+    if (deviceRef.current && isDeviceReadyRef.current) {
+      return deviceRef.current;
     }
 
-    initTwilioDevice();
+    try {
+      const empId = user?.id || 'usr_emp_1';
+      console.log(`[TWILIO SOFTPHONE] Requesting WebRTC access token for employee: ${empId}`);
+      
+      const res = await fetch('/api/twilio/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: empId })
+      });
+      const data = await res.json();
 
+      if (data.success && data.token && !data.isMock) {
+        console.log('[TWILIO SOFTPHONE] Initializing Twilio WebRTC Voice SDK...');
+        const { Device, Call } = await import('@twilio/voice-sdk');
+
+        if (deviceRef.current) {
+          try { deviceRef.current.destroy(); } catch (e) {}
+        }
+
+        const device = new Device(data.token, {
+          logLevel: 1,
+          codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU]
+        });
+
+        device.on('registered', () => {
+          console.log(`[TWILIO SOFTPHONE] Registered & Ready as ${data.identity}`);
+          isDeviceReadyRef.current = true;
+        });
+
+        device.on('error', (err: any) => {
+          console.error('[TWILIO SOFTPHONE ERROR]', err);
+          isDeviceReadyRef.current = false;
+        });
+
+        device.on('incoming', (call: any) => {
+          console.log('[TWILIO SOFTPHONE INCOMING CALL]', call);
+          activeCallRef.current = call;
+          setCallState('incoming');
+          setPhoneNumber(call.parameters?.From || 'Unknown');
+          setIsDialerOpen(true);
+
+          call.on('disconnect', () => {
+            handleCallEnded();
+          });
+        });
+
+        await device.register();
+        deviceRef.current = device;
+        return device;
+      } else {
+        console.log('[TWILIO SOFTPHONE] Demo mode active or credentials not configured.');
+      }
+    } catch (err) {
+      console.error('[TWILIO SOFTPHONE DEVICE INIT ERROR]', err);
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    if (user) {
+      ensureDeviceReady().catch(console.error);
+    }
     return () => {
-      isSubscribed = false;
       if (deviceRef.current) {
-        try {
-          deviceRef.current.destroy();
-        } catch (e) {}
+        try { deviceRef.current.destroy(); } catch (e) {}
       }
     };
   }, [user]);
@@ -237,12 +236,14 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
     setDtmfString('');
 
     try {
-      // 1. Check if Live WebRTC Device is ready in browser
-      if (deviceRef.current && isDeviceReadyRef.current) {
-        showToast(`Placing live WebRTC call to ${targetNum}...`, 'info');
-        console.log(`[TWILIO SOFTPHONE] Connecting WebRTC call to target: ${targetNum}`);
+      // 1. Ensure live WebRTC Device is ready for 2-way microphone calling
+      const device = await ensureDeviceReady();
 
-        const call = await deviceRef.current.connect({
+      if (device) {
+        showToast(`Placing live WebRTC call to ${targetNum}...`, 'info');
+        console.log(`[TWILIO SOFTPHONE] Connecting WebRTC session to: ${targetNum}`);
+
+        const call = await device.connect({
           params: {
             To: targetNum,
             type: 'softphone',
@@ -253,31 +254,31 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
         activeCallRef.current = call;
 
         call.on('ringing', () => {
-          console.log('[TWILIO SOFTPHONE] Target phone is ringing...');
+          console.log('[TWILIO SOFTPHONE] Recipient phone is ringing...');
           setCallState('ringing');
-          showToast(`Calling ${targetNum}... Recipient phone is ringing!`, 'info');
+          showToast(`Ringing ${targetNum}...`, 'info');
         });
 
         call.on('accept', () => {
-          console.log('[TWILIO SOFTPHONE] Call connected! 2-way WebRTC audio active.');
+          console.log('[TWILIO SOFTPHONE] 2-way audio connected! Computer microphone live.');
           setCallState('connected');
-          showToast('Call connected! Microphone active.', 'success');
+          showToast('Call connected! Computer microphone is live.', 'success');
         });
 
         call.on('disconnect', () => {
-          console.log('[TWILIO SOFTPHONE] Call disconnected.');
+          console.log('[TWILIO SOFTPHONE] WebRTC call disconnected.');
           handleCallEnded();
         });
 
         call.on('error', (err: any) => {
-          console.error('[TWILIO SOFTPHONE CALL ERROR]', err);
+          console.error('[TWILIO SOFTPHONE ERROR]', err);
           showToast(err.message || 'Twilio softphone call error', 'error');
           handleCallEnded();
         });
 
       } else {
-        // 2. Fallback to REST API / Simulator mode
-        showToast(`Initiating call to ${targetNum}...`, 'info');
+        // 2. Fallback to REST API / Simulator mode if live WebRTC token unavailable
+        showToast(`Placing call to ${targetNum}...`, 'info');
 
         const res = await fetch('/api/twilio/call', {
           method: 'POST',

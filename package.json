@@ -2,11 +2,14 @@
   "name": "client-pipeline",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron": "electron electron/main.js",
+    "build:exe": "npx electron-builder --win nsis"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
