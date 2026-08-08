@@ -23,7 +23,7 @@ function getBaseUrl(request: NextRequest): string {
   try {
     if (!raw.startsWith('http')) raw = `https://${raw}`;
     const parsed = new URL(raw);
-    return parsed.origin; // Guarantees pure origin e.g. "https://crm.qevn.in" with NO paths like /login
+    return parsed.origin;
   } catch (e) {
     return 'https://crm.qevn.in';
   }
@@ -41,7 +41,6 @@ export async function POST(request: NextRequest) {
 
     const type = urlParams.get('type') || formData?.get('type')?.toString() || '';
     const employeeId = urlParams.get('employeeId') || formData?.get('employeeId')?.toString() || '';
-    const Direction = formData?.get('Direction')?.toString() || 'inbound';
     const From = formData?.get('From')?.toString() || process.env.TWILIO_PHONE_NUMBER || '+17167275053';
     const RawTo = formData?.get('To')?.toString() || formData?.get('Called')?.toString() || urlParams.get('to') || '';
     const To = formatE164(RawTo);
@@ -50,68 +49,32 @@ export async function POST(request: NextRequest) {
     const baseUrl = getBaseUrl(request);
     const statusCallbackUrl = `${baseUrl}/api/twilio/status`;
 
-    console.log(`[TWILIO VOICE WEBHOOK] BaseUrl: "${baseUrl}" | Type: "${type}" | Direction: "${Direction}" | From: "${From}" | To: "${To}" | Employee: "${employeeId}"`);
+    console.log(`[TWILIO VOICE WEBHOOK] Type: "${type}" | From: "${From}" | To: "${To}" | Employee: "${employeeId}"`);
 
     const voiceResponse = new twilio.twiml.VoiceResponse();
 
-    // SCENARIO 1: REST API Call (Outbound Call created via POST /2010-04-01/Accounts/{Sid}/Calls.json)
-    // The recipient answered the phone. Connect recipient to agent client or play greeting with fallback.
-    if (type === 'outbound_api' || Direction === 'outbound-api') {
-      console.log('[TWILIO VOICE WEBHOOK] Handling REST API outbound call answered by recipient');
-      
-      voiceResponse.say({ voice: 'alice' }, 'Connecting your call to QEVN CRM agent. Please wait.');
-      
-      if (employeeId) {
-        const clientIdentity = `user_${employeeId.replace(/[^\w-]/g, '_')}`;
-        console.log(`[TWILIO VOICE WEBHOOK] Bridging answered call to WebRTC client identity: ${clientIdentity}`);
-        
-        const dial = voiceResponse.dial({
-          callerId: callerPhone,
-          timeout: 30,
-          action: statusCallbackUrl,
-          method: 'POST'
-        });
-        dial.client(clientIdentity);
+    // Determine the target number to dial
+    // For WebRTC softphone calls: To is passed as a parameter
+    // For REST API outbound calls: To is passed in URL query params  
+    const targetNumber = To || urlParams.get('to') || '';
 
-        // Fallback TwiML if agent is not currently online in WebRTC softphone
-        voiceResponse.say({ voice: 'alice' }, 'The agent is currently unavailable to take your call. Thank you for calling QEVN CRM.');
-      } else {
-        voiceResponse.say({ voice: 'alice' }, 'Thank you for answering. Your call with QEVN CRM is connected.');
-      }
-    } 
-    // SCENARIO 2: WebRTC Softphone Call (Browser Twilio Device initiated call)
-    // From starts with 'client:' (e.g. client:user_emp_1). Dial target PSTN number To.
-    else if (From.startsWith('client:') || type === 'softphone' || Direction === 'inbound') {
-      console.log(`[TWILIO VOICE WEBHOOK] Handling Softphone WebRTC call to PSTN number: ${To}`);
+    if (targetNumber) {
+      // DIRECT DIAL — no Say, no greeting, no robot voice.
+      // Just immediately connect the audio to the target PSTN number.
+      console.log(`[TWILIO VOICE WEBHOOK] Direct dialing ${targetNumber} with callerId ${callerPhone}`);
       
-      if (To) {
-        const dial = voiceResponse.dial({
-          callerId: callerPhone,
-          record: record ? 'record-from-answer' : 'do-not-record',
-          timeout: 30,
-          action: statusCallbackUrl,
-          method: 'POST'
-        });
-        dial.number(To);
-      } else {
-        voiceResponse.say({ voice: 'alice' }, 'Invalid recipient phone number requested.');
-      }
-    } 
-    // SCENARIO 3: Generic / Fallback Inbound PSTN call
-    else {
-      console.log(`[TWILIO VOICE WEBHOOK] Fallback handling for incoming call to ${To}`);
-      if (To && To !== From) {
-        const dial = voiceResponse.dial({
-          callerId: callerPhone,
-          record: record ? 'record-from-answer' : 'do-not-record',
-          timeout: 30,
-          action: statusCallbackUrl,
-          method: 'POST'
-        });
-        dial.number(To);
-      } else {
-        voiceResponse.say({ voice: 'alice' }, 'Welcome to QEVN CRM Voice Integration. Call connected.');
-      }
+      const dial = voiceResponse.dial({
+        callerId: callerPhone,
+        record: record ? 'record-from-answer' as const : 'do-not-record' as const,
+        timeout: 30,
+        action: statusCallbackUrl,
+        method: 'POST' as const
+      });
+      dial.number(targetNumber);
+    } else {
+      // No target number — should not happen in normal flow
+      console.warn('[TWILIO VOICE WEBHOOK] No target number provided, hanging up.');
+      voiceResponse.hangup();
     }
 
     const xml = voiceResponse.toString();
@@ -126,8 +89,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: any) {
     console.error('[TWILIO VOICE ERROR]', err);
+    // Even on error, return a clean hangup — NO robot voice
     const fallbackResponse = new twilio.twiml.VoiceResponse();
-    fallbackResponse.say({ voice: 'alice' }, 'An error occurred connecting your call. Please try again.');
+    fallbackResponse.hangup();
     return new NextResponse(fallbackResponse.toString(), {
       status: 200,
       headers: {
@@ -141,5 +105,3 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   return POST(request);
 }
-
-
