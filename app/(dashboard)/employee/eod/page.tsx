@@ -266,6 +266,98 @@ export default function MyEODPage() {
         </div>
       </div>
 
+      {/* Employee Identity & Metadata Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-secondary/30 border border-border/30 p-4 rounded-xl text-xs">
+        <div>
+          <span className="text-muted-foreground block">Employee Name:</span>
+          <span className="font-bold text-foreground">{user?.name || 'Employee'}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground block">Department / Role:</span>
+          <span className="font-bold text-foreground capitalize">Sales & CRM ({user?.role})</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground block">Reporting Manager:</span>
+          <span className="font-bold text-foreground">CRM Administrator</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground block">Submission Deadline:</span>
+          <span className="font-bold text-emerald-400">Today @ 7:00 PM IST</span>
+        </div>
+      </div>
+
+      {/* Planned vs Completed Target Tracker */}
+      {crmSummary && (
+        <div className="bg-card border border-border/40 p-6 rounded-2xl space-y-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground flex items-center space-x-2">
+              <BarChart2 className="h-4 w-4 text-primary" />
+              <span>Planned vs. Completed Execution Benchmark</span>
+            </h3>
+            <span className="text-[10px] uppercase font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">Target Comparison</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+            <div className="bg-secondary/30 p-4 rounded-xl border border-border/20 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground font-semibold">Outbound Dials</span>
+                <span className="font-bold text-primary">
+                  {Math.round((crmSummary.calls_made / 40) * 100)}% Achieved
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-extrabold text-foreground">
+                <span>Target: 40</span>
+                <span>Actual: {crmSummary.calls_made}</span>
+              </div>
+              <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full"
+                  style={{ width: `${Math.min(100, Math.round((crmSummary.calls_made / 40) * 100))}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-secondary/30 p-4 rounded-xl border border-border/20 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground font-semibold">Connected Calls</span>
+                <span className="font-bold text-emerald-400">
+                  {Math.round((crmSummary.connected_calls / 15) * 100)}% Achieved
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-extrabold text-foreground">
+                <span>Target: 15</span>
+                <span>Actual: {crmSummary.connected_calls}</span>
+              </div>
+              <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-400 rounded-full"
+                  style={{ width: `${Math.min(100, Math.round((crmSummary.connected_calls / 15) * 100))}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-secondary/30 p-4 rounded-xl border border-border/20 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground font-semibold">Meetings Completed</span>
+                <span className="font-bold text-amber-400">
+                  {Math.round((crmSummary.meetings_completed / 2) * 100)}% Achieved
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-extrabold text-foreground">
+                <span>Target: 2</span>
+                <span>Actual: {crmSummary.meetings_completed}</span>
+              </div>
+              <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-amber-400 rounded-full"
+                  style={{ width: `${Math.min(100, Math.round((crmSummary.meetings_completed / 2) * 100))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Manager Feedback Alert if changes requested */}
       {managerFeedback && (
         <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl flex items-start space-x-3">

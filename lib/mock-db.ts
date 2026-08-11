@@ -179,6 +179,9 @@ export interface EODReport {
   id: string;
   employee_id: string;
   report_date: string;
+  department?: string;
+  reporting_manager?: string;
+  submission_deadline?: string;
   primary_objective?: string;
   day_status: 'Productive' | 'Partially Productive' | 'Blocked';
   overall_progress?: number;
@@ -193,6 +196,12 @@ export interface EODReport {
   tomorrow_priority_1?: string;
   tomorrow_priority_2?: string;
   tomorrow_priority_3?: string;
+  planned_vs_completed?: Array<{
+    title: string;
+    target: number;
+    actual: number;
+    achievement_percentage: number;
+  }>;
   status: 'Draft' | 'Submitted' | 'Under Review' | 'Changes Requested' | 'Approved' | 'Late' | 'Missing';
   submitted_at?: string;
   reviewed_by?: string;
@@ -212,6 +221,8 @@ export interface EODReport {
     meetings_scheduled: number;
     meetings_completed: number;
     activities_count: number;
+    revenue_generated?: number;
+    pipeline_moved?: number;
   };
   employee_name?: string;
 }

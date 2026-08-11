@@ -22,6 +22,7 @@ import {
   FileText,
   CheckSquare,
   BarChart3,
+  Target,
   Menu,
   X
 } from 'lucide-react';
@@ -58,6 +59,8 @@ export const Sidebar: React.FC = () => {
     { name: 'My EOD', href: '/employee/eod', icon: FileText },
     { name: 'EOD History', href: '/employee/eod/history', icon: CheckSquare },
     { name: 'My Performance', href: '/employee/eod/performance', icon: BarChart3 },
+    { name: 'My Goals', href: '/employee/eod/goals', icon: Target },
+    { name: 'My Commitments', href: '/employee/eod/commitments', icon: CheckSquare },
     { name: 'Settings', href: '/employee/settings', icon: Settings },
   ];
 
