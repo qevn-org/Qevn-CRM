@@ -202,18 +202,45 @@ export interface CRMProject {
   created_at: string;
 }
 
+export interface ProposalPageSection {
+  id: string;
+  title: string;
+  type: 'cover' | 'exec_summary' | 'scope' | 'challenges' | 'solution' | 'case_studies' | 'pricing' | 'timeline' | 'deliverables' | 'terms' | 'cta';
+  content?: string;
+  items?: any[];
+  enabled: boolean;
+}
+
 export interface ProposalContract {
   id: string;
   document_number: string;
   title: string;
+  subtitle?: string;
   type: 'Proposal' | 'Contract' | 'SLA';
   client_id: string;
   employee_id: string;
   deal_id?: string;
+  company_name?: string;
+  client_name?: string;
+  recipient_email?: string;
   value: number;
-  status: 'Draft' | 'Sent' | 'Signed' | 'Active' | 'Expired';
+  currency?: 'INR' | 'USD' | 'EUR' | 'GBP' | 'AED';
+  status: 'Draft' | 'Generated' | 'Sent' | 'Viewed' | 'Accepted' | 'Rejected' | 'Expired' | 'Archived' | 'Active' | 'Signed';
+  version?: number;
+  previous_version_id?: string;
+  views_count?: number;
+  last_viewed_at?: string;
+  accepted_at?: string;
+  accepted_by_name?: string;
+  accepted_by_email?: string;
+  accepted_signature?: string;
   signed_at?: string;
   expires_at?: string;
+  theme_color?: string;
+  primary_logo?: string;
+  client_logo?: string;
+  sections?: ProposalPageSection[];
+  line_items?: { id: string; serviceName: string; description: string; quantity: number; rate: number }[];
   created_at: string;
 }
 
