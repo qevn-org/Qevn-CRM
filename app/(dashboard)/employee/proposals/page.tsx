@@ -8,13 +8,15 @@ import {
   Trash2, CheckCircle2, XCircle, Clock, Search, Layers, Sparkles 
 } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { useRouter } from 'next/navigation';
 import { ProposalEditorWorkspace } from '@/components/proposals/proposal-editor-workspace';
 
 export default function ProposalsPage() {
+  const router = useRouter();
   const { user } = useStore();
   const [editorOpen, setEditorOpen] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<ProposalContract | null>(null);
@@ -65,13 +67,11 @@ export default function ProposalsPage() {
   const acceptedCount = proposals.filter(p => p.status === 'Accepted').length;
 
   const handleEditProposal = (p: ProposalContract) => {
-    setSelectedProposal(p);
-    setEditorOpen(true);
+    router.push(`/employee/proposals/builder?id=${p.id}`);
   };
 
   const handleCreateNewProposal = () => {
-    setSelectedProposal(null);
-    setEditorOpen(true);
+    router.push(`/employee/proposals/builder?id=prop_${Date.now()}`);
   };
 
   const handleDuplicateProposal = (p: ProposalContract) => {
