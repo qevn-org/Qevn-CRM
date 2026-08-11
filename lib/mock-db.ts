@@ -172,6 +172,75 @@ export interface CallLog {
   created_at: string;
 }
 
+export interface SupportTicket {
+  id: string;
+  ticket_number: string;
+  client_id: string;
+  employee_id: string;
+  subject: string;
+  description: string;
+  priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  status: 'Open' | 'In Progress' | 'Waiting' | 'Resolved' | 'Closed';
+  category: 'Technical' | 'Billing' | 'Onboarding' | 'General';
+  sla_deadline?: string;
+  resolution_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CRMProject {
+  id: string;
+  project_name: string;
+  client_id: string;
+  employee_id: string;
+  deal_id?: string;
+  status: 'Planning' | 'In Progress' | 'On Hold' | 'Completed';
+  progress: number;
+  budget?: number;
+  due_date: string;
+  description?: string;
+  created_at: string;
+}
+
+export interface ProposalContract {
+  id: string;
+  document_number: string;
+  title: string;
+  type: 'Proposal' | 'Contract' | 'SLA';
+  client_id: string;
+  employee_id: string;
+  deal_id?: string;
+  value: number;
+  status: 'Draft' | 'Sent' | 'Signed' | 'Active' | 'Expired';
+  signed_at?: string;
+  expires_at?: string;
+  created_at: string;
+}
+
+export interface InvoiceRecord {
+  id: string;
+  invoice_number: string;
+  client_id: string;
+  employee_id: string;
+  deal_id?: string;
+  amount: number;
+  tax_amount?: number;
+  status: 'Draft' | 'Sent' | 'Paid' | 'Partially Paid' | 'Overdue';
+  due_date: string;
+  paid_at?: string;
+  created_at: string;
+}
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  trigger_event: string;
+  action_type: string;
+  is_active: boolean;
+  execution_count: number;
+  created_at: string;
+}
+
 export interface EODWorkItem {
   id: string;
   eod_report_id: string;

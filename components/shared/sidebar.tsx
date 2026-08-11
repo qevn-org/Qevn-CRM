@@ -23,6 +23,9 @@ import {
   CheckSquare,
   BarChart3,
   Target,
+  Ticket,
+  DollarSign,
+  Zap,
   Menu,
   X
 } from 'lucide-react';
@@ -56,6 +59,10 @@ export const Sidebar: React.FC = () => {
     { name: 'Meetings', href: '/employee/meetings', icon: Calendar },
     { name: 'Dialer', href: '/employee/dialer', icon: PhoneCall },
     { name: 'Call History', href: '/employee/calls', icon: Activity },
+    { name: 'Support Tickets', href: '/employee/tickets', icon: Ticket },
+    { name: 'Projects', href: '/employee/projects', icon: KanbanSquare },
+    { name: 'Finance & Invoices', href: '/employee/finance', icon: DollarSign },
+    { name: 'Automations', href: '/employee/automations', icon: Zap },
     { name: 'My EOD', href: '/employee/eod', icon: FileText },
     { name: 'EOD History', href: '/employee/eod/history', icon: CheckSquare },
     { name: 'My Performance', href: '/employee/eod/performance', icon: BarChart3 },
