@@ -93,49 +93,63 @@ export function ProposalInvoiceWizard({ isOpen, onClose, clientData, onSuccess }
         <head>
           <title>${docTitle}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 40px; color: #1e293b; background: #fff; line-height: 1.6; }
-            .header { text-align: center; border-bottom: 3px solid #6366f1; padding-bottom: 20px; margin-bottom: 30px; }
-            .title { font-size: 24px; font-weight: bold; color: #0f172a; margin: 0; }
-            .subtitle { font-size: 14px; color: #6366f1; font-weight: bold; margin-top: 4px; }
-            .section { margin-bottom: 30px; }
-            .section-title { font-size: 16px; font-weight: bold; color: #4338ca; border-left: 4px solid #6366f1; padding-left: 10px; margin-bottom: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th { background: #f1f5f9; padding: 10px; text-align: left; font-size: 12px; border: 1px solid #cbd5e1; }
-            td { padding: 10px; border: 1px solid #cbd5e1; font-size: 12px; }
-            .total-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; margin-top: 20px; width: 300px; margin-left: auto; }
-            .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+            body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 0; margin: 0; color: #1e293b; background: #fff; line-height: 1.6; }
+            .cover-page { background: linear-gradient(180deg, #ffffff 0%, #f7fee7 100%); padding: 60px 50px; border-bottom: 8px solid #84cc16; page-break-after: always; text-align: left; min-height: 800px; box-sizing: border-box; }
+            .brand-header { font-size: 26px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; }
+            .brand-sub { font-size: 14px; font-weight: bold; color: #65a30d; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+            .cover-title { font-size: 32px; font-weight: 900; color: #0f172a; margin-top: 140px; line-height: 1.2; max-width: 600px; }
+            .cover-meta { margin-top: 160px; font-size: 13px; color: #475569; border-top: 2px solid #bef264; pt-15px; }
+            .page { padding: 50px; page-break-after: always; box-sizing: border-box; }
+            .page-header { border-bottom: 2px solid #84cc16; padding-bottom: 10px; margin-bottom: 30px; display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; color: #65a30d; }
+            .section-title { font-size: 20px; font-weight: 900; color: #0f172a; margin-top: 25px; margin-bottom: 15px; }
+            p { font-size: 13px; color: #334155; line-height: 1.7; }
+            ul { font-size: 13px; color: #334155; line-height: 1.8; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+            th { background: #f7fee7; padding: 12px; text-align: left; border: 1px solid #d97706; color: #365314; font-weight: bold; }
+            td { padding: 12px; border: 1px solid #cbd5e1; color: #334155; }
+            .total-card { background: #f7fee7; border: 2px solid #84cc16; padding: 18px; border-radius: 12px; width: 320px; margin-left: auto; margin-top: 25px; }
+            .bank-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; font-size: 11px; margin-top: 30px; }
+            .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 15px; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1 class="title">QEVN TECHNOLOGIES</h1>
-            <p class="subtitle">Official Enterprise Commercial Document</p>
-            <p style="font-size: 12px; color: #64748b;">Ref: ${invoiceNumber} • Date: ${new Date().toLocaleDateString()}</p>
-          </div>
-
-          <div class="section">
-            <p><strong>Prepared for:</strong> ${companyName} (${clientName})</p>
-            <p><strong>Email:</strong> ${recipientEmail}</p>
-            <p><strong>Document Type:</strong> ${docType.toUpperCase()}</p>
-          </div>
-
           ${(docType === 'proposal' || docType === 'combined') ? `
-            <div class="section">
-              <h2 class="section-title">1. Executive Technical Summary</h2>
-              <p>QEVN CRM deploys a unified SaaS Business Operating System tailored for ${companyName}. Features include Twilio Softphone PSTN integration, Call Intelligence, Support Ticketing, and EOD analytics.</p>
+            <div class="cover-page">
+              <div class="brand-header">Qevn <span style="color:#84cc16;">×</span> infinium</div>
+              <div class="brand-sub">AUGUST 2026</div>
+              <div class="cover-title">
+                AI-Powered Outbound Growth Engine Proposal
+              </div>
+              <div class="cover-meta">
+                <p><strong>Prepared for:</strong> ${companyName} (${clientName})</p>
+                <p><strong>Presented by:</strong> Qevn AI Engineering & Solutions Team</p>
+                <p><strong>Ref Code:</strong> ${invoiceNumber}</p>
+              </div>
             </div>
-            <div class="section">
-              <h2 class="section-title">2. Scope of Work & Deliverables</h2>
-              <ul>
-                <li>Custom Next.js 16 App Router CRM Deployment with Supabase RLS.</li>
-                <li>Twilio WebRTC Voice Integration with direct PSTN call bridging.</li>
-                <li>Call Intelligence Engine with prospect pain point logging and intent ratings.</li>
-              </ul>
+            <div class="page">
+              <div class="page-header">
+                <span>Qevn × infinium</span>
+                <span>AUGUST 2026</span>
+              </div>
+              <h2 class="section-title">Executive Summary</h2>
+              <p><strong>${companyName}</strong> is a forward-thinking enterprise with a clear vision for scalable revenue growth. As market dynamics become increasingly competitive, the ability to consistently identify, reach, and convert high-quality leads determines which businesses scale and which stagnate.</p>
+              <p><strong>QEVN</strong> has conducted a thorough architectural review of ${companyName}'s current outbound workflows. We recognize that ${companyName} requires a modern, scalable, intelligent lead generation pipeline that moves beyond manual prospecting into fully automated AI-driven outbound engines.</p>
+              <h3 style="font-size:15px; font-weight:bold; color:#0f172a; margin-top:20px;">Why Outbound Matters Now</h3>
+              <p>Traditional manual lead generation is broken. Manually sourcing contacts, sending generic emails, and hoping for responses is no longer viable. Modern buyers expect hyper-personalized outreach. AI-powered outbound systems empower businesses to reach thousands of qualified prospects with personalized messaging at a fraction of the traditional cost and time.</p>
+              <h3 style="font-size:15px; font-weight:bold; color:#0f172a; margin-top:20px;">Why QEVN</h3>
+              <p>QEVN is an AI engineering company that builds production-grade intelligent business operating systems. We don't configure off-the-shelf software; we architect custom AI pipelines built around your specific business requirements, combining multi-agent AI architectures, Twilio softphone voice bridging, and deep automation.</p>
             </div>
           ` : ''}
-
-          <div class="section">
-            <h2 class="section-title">Commercial Line Items & GST Invoice</h2>
+          <div class="page">
+            <div class="page-header">
+              <span>QEVN TECHNOLOGIES</span>
+              <span>Ref: ${invoiceNumber}</span>
+            </div>
+            <h2 class="section-title">${docType === 'invoice' ? 'GST Tax Invoice' : docType === 'contract' ? 'Legal SLA Service Contract' : 'Commercial Investment Schedule'}</h2>
+            <p><strong>Client Entity:</strong> ${companyName} (${clientName})</p>
+            <p><strong>Email:</strong> ${recipientEmail}</p>
+            <p><strong>Invoice Number:</strong> ${invoiceNumber}</p>
+            <p><strong>Payment Due Date:</strong> ${dueDate}</p>
             <table>
               <thead>
                 <tr>
@@ -156,18 +170,23 @@ export function ProposalInvoiceWizard({ isOpen, onClose, clientData, onSuccess }
                 `).join('')}
               </tbody>
             </table>
-
-            <div class="total-box">
-              <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Subtotal:</span><strong>₹${subtotal.toLocaleString()}</strong></div>
-              <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>GST Tax (18%):</span><strong>₹${gstAmount.toLocaleString()}</strong></div>
-              <div style="display:flex; justify-content:space-between; border-top:1px solid #cbd5e1; padding-top:5px; font-weight:bold; color:#16a34a; font-size:14px;"><span>Grand Total:</span><span>₹${grandTotal.toLocaleString()}</span></div>
+            <div class="total-card">
+              <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;"><span>Subtotal:</span><strong>₹${subtotal.toLocaleString()}</strong></div>
+              <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;"><span>GST (18% IGST/CGST):</span><strong>₹${gstAmount.toLocaleString()}</strong></div>
+              <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:bold; color:#15803d; border-top:2px solid #84cc16; padding-top:8px; margin-top:8px;"><span>Grand Total:</span><span>₹${grandTotal.toLocaleString()}</span></div>
+            </div>
+            <div class="bank-box">
+              <p style="margin:0 0 5px 0; font-weight:bold; color:#0f172a;">BANK NEFT / RTGS TRANSFER DETAILS:</p>
+              <p style="margin:2px 0;"><strong>Bank Name:</strong> HDFC Bank Ltd</p>
+              <p style="margin:2px 0;"><strong>Account Name:</strong> QEVN TECHNOLOGIES PRIVATE LIMITED</p>
+              <p style="margin:2px 0;"><strong>Account Number:</strong> 50200088991122</p>
+              <p style="margin:2px 0;"><strong>IFSC Code:</strong> HDFC0001234</p>
+              <p style="margin:2px 0;"><strong>GSTIN:</strong> 27AAAAA0000A1Z5</p>
+            </div>
+            <div class="footer">
+              <p>© 2026 QEVN Technologies • Official Commercial Document • Support: hello@qevn.in</p>
             </div>
           </div>
-
-          <div class="footer">
-            <p>© 2026 QEVN CRM & Enterprise Automation Platform • Support: hello@qevn.in</p>
-          </div>
-
           <script>
             window.onload = function() {
               window.print();
