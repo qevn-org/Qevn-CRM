@@ -159,6 +159,63 @@ export interface CallLog {
   created_at: string;
 }
 
+export interface EODWorkItem {
+  id: string;
+  eod_report_id: string;
+  task_name: string;
+  description?: string;
+  project?: string;
+  client_id?: string;
+  priority: 'Low' | 'Medium' | 'High';
+  status: 'Completed' | 'In Progress' | 'Blocked' | 'Cancelled';
+  time_spent_minutes?: number;
+  start_time?: string;
+  end_time?: string;
+  reference_link?: string;
+  created_at: string;
+}
+
+export interface EODReport {
+  id: string;
+  employee_id: string;
+  report_date: string;
+  primary_objective?: string;
+  day_status: 'Productive' | 'Partially Productive' | 'Blocked';
+  overall_progress?: number;
+  biggest_achievement?: string;
+  important_work?: string;
+  has_blockers: boolean;
+  blocker_type?: string;
+  blocker_description?: string;
+  needs_help: boolean;
+  help_details?: string;
+  learnings?: string;
+  tomorrow_priority_1?: string;
+  tomorrow_priority_2?: string;
+  tomorrow_priority_3?: string;
+  status: 'Draft' | 'Submitted' | 'Under Review' | 'Changes Requested' | 'Approved' | 'Late' | 'Missing';
+  submitted_at?: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  manager_feedback?: string;
+  created_at: string;
+  updated_at: string;
+  work_items?: EODWorkItem[];
+  crm_activity_summary?: {
+    calls_made: number;
+    outbound_calls: number;
+    inbound_calls: number;
+    connected_calls: number;
+    total_call_duration: number;
+    leads_created: number;
+    leads_contacted: number;
+    meetings_scheduled: number;
+    meetings_completed: number;
+    activities_count: number;
+  };
+  employee_name?: string;
+}
+
 export interface MockSchema {
   profiles: Profile[];
   clients: Client[];
@@ -168,8 +225,10 @@ export interface MockSchema {
   activities: Activity[];
   email_logs: EmailLog[];
   calendar_integrations: CalendarIntegration[];
-  twilio_integrations: TwilioIntegration[];
-  call_logs: CallLog[];
+  twilio_integrations?: TwilioIntegration[];
+  call_logs?: CallLog[];
+  eod_reports?: EODReport[];
+  eod_work_items?: EODWorkItem[];
 }
 
 const DEFAULT_DB: MockSchema = {

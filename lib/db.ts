@@ -12,7 +12,9 @@ import {
   EmailLog, 
   CalendarIntegration,
   TwilioIntegration,
-  CallLog
+  CallLog,
+  EODReport,
+  EODWorkItem
 } from './mock-db';
 
 // Helper to generate IDs when in mock mode
@@ -1051,5 +1053,261 @@ export const db = {
     }
 
     return updated;
+  },
+
+  // -------------------------------------------------------------------------
+  // EOD REPORTING & PERFORMANCE MODULE METHODS
+  // -------------------------------------------------------------------------
+  async getDailyCRMActivity(employeeId: string, targetDateStr?: string) {
+    const dateStr = targetDateStr || new Date().toISOString().split('T')[0];
+    
+    // 1. Fetch Call Logs
+    const callLogs = await this.getCallLogs(employeeId, 'employee');
+    const dayCalls = callLogs.filter(c => c.created_at && c.created_at.startsWith(dateStr));
+    
+    const calls_made = dayCalls.length;
+    const outbound_calls = dayCalls.filter(c => c.direction === 'outbound').length;
+    const inbound_calls = dayCalls.filter(c => c.direction === 'inbound').length;
+    const connected_calls = dayCalls.filter(c => c.status === 'completed').length;
+    const total_call_duration = dayCalls.reduce((acc, c) => acc + (c.duration || 0), 0);
+
+    // 2. Fetch Clients / Leads
+    const clients = await this.getClients(employeeId, 'employee');
+    const leads_created = clients.filter(c => c.created_at && c.created_at.startsWith(dateStr) && c.status === 'Lead').length;
+    const leads_contacted = clients.filter(c => c.status === 'Contacted').length;
+
+    // 3. Fetch Meetings
+    const meetings = await this.getMeetings(employeeId, 'employee');
+    const meetings_scheduled = meetings.filter(m => m.created_at && m.created_at.startsWith(dateStr)).length;
+    const meetings_completed = meetings.filter(m => m.meeting_date === dateStr && m.status === 'Completed').length;
+
+    // 4. Fetch Audit Activities
+    const activities = await this.getActivities(employeeId, 'employee');
+    const activities_count = activities.filter(a => a.timestamp && a.timestamp.startsWith(dateStr)).length;
+
+    return {
+      date: dateStr,
+      calls_made,
+      outbound_calls,
+      inbound_calls,
+      connected_calls,
+      total_call_duration,
+      leads_created,
+      leads_contacted,
+      meetings_scheduled,
+      meetings_completed,
+      activities_count
+    };
+  },
+
+  async getEODReport(employeeId: string, dateStr?: string): Promise<EODReport | null> {
+    const targetDate = dateStr || new Date().toISOString().split('T')[0];
+    const client = supabaseAdmin || supabase;
+
+    if (client && useSupabase(employeeId)) {
+      try {
+        const { data, error } = await client
+          .from('eod_reports')
+          .select('*, eod_work_items(*), profiles:employee_id(name)')
+          .eq('employee_id', employeeId)
+          .eq('report_date', targetDate)
+          .single();
+
+        if (!error && data) {
+          const activitySummary = await this.getDailyCRMActivity(employeeId, targetDate);
+          return {
+            ...data,
+            work_items: data.eod_work_items || [],
+            employee_name: (data.profiles as any)?.name || 'Unknown',
+            crm_activity_summary: activitySummary
+          };
+        }
+      } catch (err) {
+        console.error('[DB] getEODReport Supabase error:', err);
+      }
+    }
+
+    const mockDb = getMockDB();
+    if (!mockDb.eod_reports) mockDb.eod_reports = [];
+    if (!mockDb.eod_work_items) mockDb.eod_work_items = [];
+
+    const foundReport = mockDb.eod_reports.find(r => r.employee_id === employeeId && r.report_date === targetDate);
+    if (foundReport) {
+      const items = mockDb.eod_work_items.filter(w => w.eod_report_id === foundReport.id);
+      const activitySummary = await this.getDailyCRMActivity(employeeId, targetDate);
+      const profile = mockDb.profiles.find(p => p.id === employeeId);
+      return {
+        ...foundReport,
+        work_items: items,
+        employee_name: profile?.name || 'Unknown',
+        crm_activity_summary: activitySummary
+      };
+    }
+
+    return null;
+  },
+
+  async saveEODReport(
+    reportPayload: Omit<EODReport, 'id' | 'created_at' | 'updated_at' | 'work_items'>,
+    workItems: Array<Omit<EODWorkItem, 'id' | 'eod_report_id' | 'created_at'>>
+  ): Promise<EODReport | null> {
+    const now = new Date().toISOString();
+    const mockDb = getMockDB();
+    if (!mockDb.eod_reports) mockDb.eod_reports = [];
+    if (!mockDb.eod_work_items) mockDb.eod_work_items = [];
+
+    let reportId = genId('eod');
+    const existingIdx = mockDb.eod_reports.findIndex(
+      r => r.employee_id === reportPayload.employee_id && r.report_date === reportPayload.report_date
+    );
+
+    if (existingIdx !== -1) {
+      reportId = mockDb.eod_reports[existingIdx].id;
+    }
+
+    const newReport: EODReport = {
+      ...reportPayload,
+      id: reportId,
+      created_at: existingIdx !== -1 ? mockDb.eod_reports[existingIdx].created_at : now,
+      updated_at: now
+    };
+
+    if (existingIdx !== -1) {
+      mockDb.eod_reports[existingIdx] = newReport;
+    } else {
+      mockDb.eod_reports.unshift(newReport);
+    }
+
+    // Save work items
+    mockDb.eod_work_items = mockDb.eod_work_items.filter(w => w.eod_report_id !== reportId);
+    const savedItems: EODWorkItem[] = workItems.map(item => ({
+      ...item,
+      id: genId('wi'),
+      eod_report_id: reportId,
+      created_at: now
+    }));
+    mockDb.eod_work_items.push(...savedItems);
+
+    saveMockDB(mockDb);
+
+    // Save to Supabase
+    const client = supabaseAdmin || supabase;
+    if (client && useSupabase(reportPayload.employee_id)) {
+      try {
+        const { data: upsertedReport } = await client
+          .from('eod_reports')
+          .upsert({ ...reportPayload, updated_at: now }, { onConflict: 'employee_id,report_date' })
+          .select()
+          .single();
+
+        if (upsertedReport) {
+          reportId = upsertedReport.id;
+          await client.from('eod_work_items').delete().eq('eod_report_id', reportId);
+          if (savedItems.length > 0) {
+            await client.from('eod_work_items').insert(savedItems.map(i => ({ ...i, eod_report_id: reportId })));
+          }
+        }
+      } catch (err) {
+        console.error('[DB] saveEODReport Supabase error:', err);
+      }
+    }
+
+    const activitySummary = await this.getDailyCRMActivity(reportPayload.employee_id, reportPayload.report_date);
+    
+    // Log Activity Timeline
+    await this.createActivity({
+      employee_id: reportPayload.employee_id,
+      action: reportPayload.status === 'Submitted' ? 'EOD Submitted' : 'EOD Draft Saved',
+      description: `EOD Report for ${reportPayload.report_date} ${reportPayload.status.toLowerCase()}`
+    });
+
+    return {
+      ...newReport,
+      work_items: savedItems,
+      crm_activity_summary: activitySummary
+    };
+  },
+
+  async listEODReports(filters: { employeeId?: string; role?: string; date?: string; status?: string }): Promise<EODReport[]> {
+    const client = supabaseAdmin || supabase;
+    if (client) {
+      try {
+        let query = client.from('eod_reports').select('*, profiles:employee_id(name)');
+        if (filters.employeeId && filters.role !== 'admin') {
+          query = query.eq('employee_id', filters.employeeId);
+        }
+        if (filters.date) {
+          query = query.eq('report_date', filters.date);
+        }
+        if (filters.status) {
+          query = query.eq('status', filters.status);
+        }
+        const { data, error } = await query.order('report_date', { ascending: false });
+        if (!error && data) {
+          return data.map(r => ({
+            ...r,
+            employee_name: (r.profiles as any)?.name || 'Unknown'
+          }));
+        }
+      } catch (err) {
+        console.error('[DB] listEODReports Supabase error:', err);
+      }
+    }
+
+    const mockDb = getMockDB();
+    if (!mockDb.eod_reports) mockDb.eod_reports = [];
+    let list = mockDb.eod_reports;
+    if (filters.employeeId && filters.role !== 'admin') {
+      list = list.filter(r => r.employee_id === filters.employeeId);
+    }
+    if (filters.date) {
+      list = list.filter(r => r.report_date === filters.date);
+    }
+    if (filters.status) {
+      list = list.filter(r => r.status === filters.status);
+    }
+    const profilesMap = new Map((mockDb.profiles || []).map(p => [p.id, p.name]));
+    return list.map(r => ({
+      ...r,
+      employee_name: profilesMap.get(r.employee_id) || 'Unknown'
+    }));
+  },
+
+  async reviewEODReport(reportId: string, status: 'Approved' | 'Changes Requested', managerFeedback: string, reviewerId: string): Promise<boolean> {
+    const now = new Date().toISOString();
+    const mockDb = getMockDB();
+    if (!mockDb.eod_reports) mockDb.eod_reports = [];
+    const idx = mockDb.eod_reports.findIndex(r => r.id === reportId);
+    if (idx !== -1) {
+      mockDb.eod_reports[idx] = {
+        ...mockDb.eod_reports[idx],
+        status,
+        manager_feedback: managerFeedback,
+        reviewed_by: reviewerId,
+        reviewed_at: now,
+        updated_at: now
+      };
+      saveMockDB(mockDb);
+    }
+
+    const client = supabaseAdmin || supabase;
+    if (client) {
+      try {
+        await client
+          .from('eod_reports')
+          .update({
+            status,
+            manager_feedback: managerFeedback,
+            reviewed_by: reviewerId,
+            reviewed_at: now,
+            updated_at: now
+          })
+          .eq('id', reportId);
+      } catch (err) {
+        console.error('[DB] reviewEODReport Supabase error:', err);
+      }
+    }
+
+    return true;
   }
 };

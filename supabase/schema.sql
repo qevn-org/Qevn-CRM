@@ -158,6 +158,52 @@ create table if not exists public.call_logs (
   created_at timestamptz not null default now()
 );
 
+-- EOD REPORTS TABLE
+create table if not exists public.eod_reports (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.profiles(id) on delete cascade,
+  report_date date not null,
+  primary_objective text,
+  day_status text check (day_status in ('Productive', 'Partially Productive', 'Blocked')) default 'Productive',
+  overall_progress integer check (overall_progress >= 0 and overall_progress <= 100),
+  biggest_achievement text,
+  important_work text,
+  has_blockers boolean not null default false,
+  blocker_type text,
+  blocker_description text,
+  needs_help boolean not null default false,
+  help_details text,
+  learnings text,
+  tomorrow_priority_1 text,
+  tomorrow_priority_2 text,
+  tomorrow_priority_3 text,
+  status text check (status in ('Draft', 'Submitted', 'Under Review', 'Changes Requested', 'Approved', 'Late', 'Missing')) default 'Draft',
+  submitted_at timestamptz,
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  reviewed_at timestamptz,
+  manager_feedback text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (employee_id, report_date)
+);
+
+-- EOD WORK ITEMS TABLE
+create table if not exists public.eod_work_items (
+  id uuid primary key default gen_random_uuid(),
+  eod_report_id uuid not null references public.eod_reports(id) on delete cascade,
+  task_name text not null,
+  description text,
+  project text,
+  client_id uuid references public.clients(id) on delete set null,
+  priority text check (priority in ('Low', 'Medium', 'High')) default 'Medium',
+  status text check (status in ('Completed', 'In Progress', 'Blocked', 'Cancelled')) default 'Completed',
+  time_spent_minutes integer default 0,
+  start_time text,
+  end_time text,
+  reference_link text,
+  created_at timestamptz not null default now()
+);
+
 -- Trigger to sync new user signups from auth.users to public.profiles
 create or replace function public.handle_new_user()
 returns trigger as $$
@@ -179,3 +225,4 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+

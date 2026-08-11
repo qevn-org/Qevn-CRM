@@ -19,6 +19,9 @@ import {
   Moon,
   Shield,
   Activity,
+  FileText,
+  CheckSquare,
+  BarChart3,
   Menu,
   X
 } from 'lucide-react';
@@ -52,11 +55,15 @@ export const Sidebar: React.FC = () => {
     { name: 'Meetings', href: '/employee/meetings', icon: Calendar },
     { name: 'Dialer', href: '/employee/dialer', icon: PhoneCall },
     { name: 'Call History', href: '/employee/calls', icon: Activity },
+    { name: 'My EOD', href: '/employee/eod', icon: FileText },
+    { name: 'EOD History', href: '/employee/eod/history', icon: CheckSquare },
+    { name: 'My Performance', href: '/employee/eod/performance', icon: BarChart3 },
     { name: 'Settings', href: '/employee/settings', icon: Settings },
   ];
 
   const adminLinks = [
     { name: 'Admin Dashboard', href: '/admin/dashboard', icon: Shield },
+    { name: 'EOD Dashboard', href: '/admin/eod', icon: FileText },
     { name: 'Employees', href: '/admin/employees', icon: Users },
     { name: 'Activity Log', href: '/admin/activities', icon: Activity },
   ];
