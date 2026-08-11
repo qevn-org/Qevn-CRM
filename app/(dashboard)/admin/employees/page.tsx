@@ -13,10 +13,11 @@ import { Select } from '@/components/ui/select';
 import { Dialog } from '@/components/ui/dialog';
 import { showToast } from '@/components/ui/toast';
 import { sendEmail, emailTemplates } from '@/lib/email/resend';
-import { Users, Plus, Award, RefreshCw, Power, ShieldAlert, ArrowRightLeft } from 'lucide-react';
+import { setImpersonationCookies } from '@/lib/auth/auth-guard';
+import { Users, Plus, Award, RefreshCw, Power, ShieldAlert, ArrowRightLeft, UserCheck } from 'lucide-react';
 
 export default function EmployeesAdminPage() {
-  const { user } = useStore();
+  const { user, setUser } = useStore();
   
   // Data States
   const [employees, setEmployees] = useState<Profile[]>([]);
@@ -53,6 +54,28 @@ export default function EmployeesAdminPage() {
       showToast('Error loading directories', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleImpersonate = async (emp: Profile) => {
+    if (!user) return;
+    try {
+      setImpersonationCookies(user.id, emp.id, emp.role);
+      setUser(emp);
+      
+      await db.createActivity({
+        employee_id: user.id,
+        action: 'Admin Impersonation Started',
+        description: `Admin ${user.name} logged in as employee: ${emp.name} (${emp.email})`
+      });
+
+      showToast(`Now viewing CRM as ${emp.name}`, 'success');
+      if (typeof window !== 'undefined') {
+        window.location.replace('/employee/dashboard');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to impersonate employee', 'error');
     }
   };
 
@@ -235,18 +258,20 @@ export default function EmployeesAdminPage() {
 
       {/* Main Employee list table */}
       <Card>
-        <CardContent className="p-0">
+        <CardHeader>
+          <CardTitle>Team Directory ({employees.length})</CardTitle>
+          <CardDescription>Click "Login as Employee" to securely inspect the dashboard as that team member.</CardDescription>
+        </CardHeader>
+        <CardContent>
           {isLoading ? (
-            <div className="p-10 space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-12 bg-secondary/30 animate-pulse rounded-lg w-full" />
-              ))}
-            </div>
+            <div className="py-12 text-center text-sm text-muted-foreground">Loading employee directory...</div>
+          ) : employees.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">No employees found in directory.</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employee Details</TableHead>
+                  <TableHead>Employee</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Clients Assigned</TableHead>
                   <TableHead>Meetings Held</TableHead>
@@ -288,6 +313,14 @@ export default function EmployeesAdminPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="text-xs py-1 h-8 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 cursor-pointer"
+                            onClick={() => handleImpersonate(emp)}
+                          >
+                            <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Login as Employee
+                          </Button>
                           <Button variant="outline" size="sm" className="text-xs py-1 h-8" onClick={() => openReassignDialog(emp)}>
                             <ArrowRightLeft className="mr-1.5 h-3.5 w-3.5" /> Reassign
                           </Button>

@@ -87,3 +87,39 @@ export function purgeClientSession() {
     }
   }
 }
+
+/**
+ * Checks if the active session is currently an admin impersonation session
+ */
+export function getImpersonatorCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|; )\s*qevn_impersonator_id\s*=\s*([^;]+)/);
+  if (match) return decodeURIComponent(match[1]);
+  return null;
+}
+
+/**
+ * Sets impersonation cookies to switch active profile while preserving admin ID
+ */
+export function setImpersonationCookies(adminId: string, employeeId: string, employeeRole: string) {
+  if (typeof document === 'undefined') return;
+  const domain = window.location.hostname;
+  const cookieOptions = `; path=/; max-age=86400; SameSite=Lax`;
+
+  document.cookie = `qevn_impersonator_id=${adminId}${cookieOptions}`;
+  document.cookie = `qevn_user_id=${employeeId}${cookieOptions}`;
+  document.cookie = `qevn_role=${employeeRole}${cookieOptions}`;
+}
+
+/**
+ * Clears impersonation cookies and restores admin session
+ */
+export function clearImpersonationCookies(adminId: string, adminRole: string) {
+  if (typeof document === 'undefined') return;
+  const cookieOptions = `; path=/; max-age=86400; SameSite=Lax`;
+
+  document.cookie = `qevn_impersonator_id=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax`;
+  document.cookie = `qevn_user_id=${adminId}${cookieOptions}`;
+  document.cookie = `qevn_role=${adminRole}${cookieOptions}`;
+}
+

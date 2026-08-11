@@ -8,14 +8,46 @@ import { Bell, Search, User, CheckCheck, Menu, PhoneCall, UploadCloud } from 'lu
 import { usePathname } from 'next/navigation';
 import { ImportModal } from '@/components/import/import-modal';
 
+import { getImpersonatorCookie, clearImpersonationCookies } from '@/lib/auth/auth-guard';
+import { db } from '@/lib/db';
+import { showToast } from '@/components/ui/toast';
+import { ShieldAlert, LogOut as ExitIcon } from 'lucide-react';
+
 export const Header: React.FC = () => {
   const pathname = usePathname();
-  const { user, notifications, markNotificationRead, markAllNotificationsRead, toggleSidebar } = useStore();
+  const { user, setUser, notifications, markNotificationRead, markAllNotificationsRead, toggleSidebar } = useStore();
   const { setIsDialerOpen, callState, callDuration } = useDialer();
   const [bellOpen, setBellOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
 
   if (!user) return null;
+
+  const impersonatorId = getImpersonatorCookie();
+
+  const handleExitImpersonation = async () => {
+    if (!impersonatorId) return;
+    try {
+      const adminProfile = await db.getProfile(impersonatorId);
+      if (adminProfile) {
+        clearImpersonationCookies(adminProfile.id, adminProfile.role);
+        setUser(adminProfile);
+        
+        await db.createActivity({
+          employee_id: adminProfile.id,
+          action: 'Admin Impersonation Ended',
+          description: `Admin ${adminProfile.name} exited employee impersonation mode`
+        });
+
+        showToast(`Exited impersonation mode. Welcome back, ${adminProfile.name}!`, 'success');
+        if (typeof window !== 'undefined') {
+          window.location.replace('/admin/employees');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to exit impersonation mode', 'error');
+    }
+  };
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -46,7 +78,27 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border/20 px-6 backdrop-blur-md bg-background/55">
+    <div className="flex flex-col w-full sticky top-0 z-30">
+      {/* Impersonation Status Banner */}
+      {impersonatorId && (
+        <div className="bg-amber-500/20 border-b border-amber-500/40 text-amber-300 px-6 py-2 flex items-center justify-between text-xs font-semibold backdrop-blur-md">
+          <div className="flex items-center space-x-2">
+            <ShieldAlert className="h-4 w-4 text-amber-400 animate-pulse" />
+            <span>
+              IMPERSONATION MODE ACTIVE: Viewing CRM as <strong>{user.name}</strong> ({user.email} - {user.role})
+            </span>
+          </div>
+          <button
+            onClick={handleExitImpersonation}
+            className="flex items-center space-x-1 px-3 py-1 rounded bg-amber-500 text-black font-bold hover:bg-amber-400 transition-colors cursor-pointer"
+          >
+            <ExitIcon className="h-3.5 w-3.5" />
+            <span>Exit Impersonation Mode & Return to Admin</span>
+          </button>
+        </div>
+      )}
+
+      <header className="flex h-16 w-full items-center justify-between border-b border-border/20 px-6 backdrop-blur-md bg-background/55">
       {/* Page Title & Mobile Sidebar toggle */}
       <div className="flex items-center space-x-4">
         <button
@@ -172,5 +224,6 @@ export const Header: React.FC = () => {
         }}
       />
     </header>
-  );
+  </div>
+);
 };
