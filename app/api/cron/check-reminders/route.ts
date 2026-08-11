@@ -3,10 +3,20 @@ import { db } from '../../../../lib/db';
 import { sendEmail, emailTemplates } from '../../../../lib/email/resend';
 
 export async function GET(request: NextRequest) {
-  // Simple auth key check to prevent arbitrary hits in production
+  // Flexible auth check for Vercel Cron, GitHub Actions, or local timers
   const authHeader = request.headers.get('authorization');
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 412 });
+  const xCronHeader = request.headers.get('x-cron-secret');
+  const secretParam = request.nextUrl.searchParams.get('secret');
+
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const isBearerValid = authHeader === `Bearer ${cronSecret}`;
+    const isHeaderValid = xCronHeader === cronSecret;
+    const isParamValid = secretParam === cronSecret;
+
+    if (!isBearerValid && !isHeaderValid && !isParamValid) {
+      return NextResponse.json({ error: 'Unauthorized cron trigger' }, { status: 401 });
+    }
   }
 
   try {

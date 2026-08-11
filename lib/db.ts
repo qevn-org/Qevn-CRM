@@ -127,32 +127,61 @@ export const db = {
   },
 
   async createProfile(name: string, email: string, phone: string, role: 'admin' | 'employee', userId?: string): Promise<Profile | null> {
-    if (useSupabase(userId) && supabase) {
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert({ id: genId('usr'), name, email, phone, role, status: 'active' })
-        .select()
-        .single();
-      if (error) return null;
-      return data;
-    } else {
-      const mockDb = getMockDB();
-      if (mockDb.profiles.some(p => p.email.toLowerCase() === email.toLowerCase())) {
-        return null;
+    if (isSupabaseConfigured() && supabaseAdmin) {
+      try {
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email,
+          password: 'password',
+          email_confirm: true,
+          user_metadata: { name, role, phone }
+        });
+
+        if (!authError && authData.user) {
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('*')
+            .eq('id', authData.user.id)
+            .single();
+
+          if (profile) return profile;
+
+          // If trigger didn't fire, manually upsert profile
+          const { data: newProfile } = await supabaseAdmin
+            .from('profiles')
+            .upsert({
+              id: authData.user.id,
+              name,
+              email,
+              phone,
+              role,
+              status: 'active'
+            })
+            .select()
+            .single();
+
+          return newProfile;
+        }
+      } catch (err) {
+        console.error('[DB] Supabase admin create user error:', err);
       }
-      const newProfile: Profile = {
-        id: genId('usr_emp'),
-        name,
-        email,
-        phone,
-        role,
-        status: 'active',
-        created_at: new Date().toISOString()
-      };
-      mockDb.profiles.push(newProfile);
-      saveMockDB(mockDb);
-      return newProfile;
     }
+
+    const mockDb = getMockDB();
+    if (mockDb.profiles.some(p => p.email.toLowerCase() === email.toLowerCase())) {
+      return null;
+    }
+    const newProfile: Profile = {
+      id: genId('usr_emp'),
+      name,
+      email,
+      phone,
+      role,
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+    mockDb.profiles.push(newProfile);
+    saveMockDB(mockDb);
+    return newProfile;
   },
 
   async updateProfileStatus(userId: string, status: 'active' | 'disabled'): Promise<boolean> {
