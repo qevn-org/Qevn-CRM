@@ -156,6 +156,19 @@ export interface CallLog {
   followup_required?: boolean;
   followup_date?: string;
   tags?: string[];
+  customer_requirement?: string;
+  pain_points?: string;
+  customer_interest?: 'High' | 'Medium' | 'Low' | 'None';
+  buying_intent?: 'Immediate' | 'This Week' | 'This Month' | '1-3 Months' | 'Later' | 'Unknown';
+  decision_maker?: string;
+  budget?: string;
+  timeline?: string;
+  objections?: string;
+  competitor?: string;
+  next_action?: string;
+  next_action_owner?: string;
+  next_action_date?: string;
+  transcript?: string;
   created_at: string;
 }
 

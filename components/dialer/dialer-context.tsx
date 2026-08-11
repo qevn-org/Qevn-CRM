@@ -403,6 +403,15 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
     followupRequired: boolean;
     followupDate?: string;
     tags: string[];
+    customerRequirement?: string;
+    painPoints?: string;
+    customerInterest?: string;
+    buyingIntent?: string;
+    budget?: string;
+    objections?: string;
+    competitor?: string;
+    nextAction?: string;
+    nextActionDate?: string;
   }) => {
     if (!lastCallData || !user) return;
 
@@ -423,7 +432,16 @@ export function DialerProvider({ children }: { children: React.ReactNode }) {
           notes: notesData.notes,
           followupRequired: notesData.followupRequired,
           followupDate: notesData.followupDate,
-          tags: notesData.tags
+          tags: notesData.tags,
+          customerRequirement: notesData.customerRequirement,
+          painPoints: notesData.painPoints,
+          customerInterest: notesData.customerInterest,
+          buyingIntent: notesData.buyingIntent,
+          budget: notesData.budget,
+          objections: notesData.objections,
+          competitor: notesData.competitor,
+          nextAction: notesData.nextAction,
+          nextActionDate: notesData.nextActionDate
         })
       });
     } catch (err) {

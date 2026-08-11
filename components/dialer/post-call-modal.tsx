@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { showToast } from '@/components/ui/toast';
-import { PhoneCall, CheckCircle, Calendar, Tag, FileText, Clock } from 'lucide-react';
+import { PhoneCall, CheckCircle, Calendar, Tag, FileText, Clock, Brain, AlertCircle, DollarSign, Target } from 'lucide-react';
 
 interface PostCallModalProps {
   isOpen: boolean;
@@ -25,11 +25,24 @@ interface PostCallModalProps {
     followupRequired: boolean;
     followupDate?: string;
     tags: string[];
+    customerRequirement?: string;
+    painPoints?: string;
+    customerInterest?: 'High' | 'Medium' | 'Low' | 'None';
+    buyingIntent?: 'Immediate' | 'This Week' | 'This Month' | '1-3 Months' | 'Later' | 'Unknown';
+    budget?: string;
+    objections?: string;
+    competitor?: string;
+    nextAction?: string;
+    nextActionOwner?: string;
+    nextActionDate?: string;
   }) => Promise<void>;
 }
 
 const OUTCOMES = [
   { value: 'Connected - Interested', label: 'Connected - Interested' },
+  { value: 'Connected - Qualified Lead', label: 'Connected - Qualified Lead' },
+  { value: 'Connected - Meeting Booked', label: 'Connected - Meeting Booked' },
+  { value: 'Connected - Proposal Requested', label: 'Connected - Proposal Requested' },
   { value: 'Connected - Follow-up Needed', label: 'Connected - Follow-up Needed' },
   { value: 'Left Voicemail', label: 'Left Voicemail' },
   { value: 'Call Back Later', label: 'Call Back Later' },
@@ -38,22 +51,56 @@ const OUTCOMES = [
   { value: 'No Answer', label: 'No Answer' },
 ];
 
+const INTEREST_LEVELS = [
+  { value: 'High', label: 'High Interest 🔥' },
+  { value: 'Medium', label: 'Medium Interest ⚡' },
+  { value: 'Low', label: 'Low Interest ❄️' },
+  { value: 'None', label: 'No Interest 🚫' },
+];
+
+const BUYING_INTENTS = [
+  { value: 'Immediate', label: 'Immediate Purchase' },
+  { value: 'This Week', label: 'This Week' },
+  { value: 'This Month', label: 'This Month' },
+  { value: '1-3 Months', label: '1–3 Months' },
+  { value: 'Later', label: 'Later / Future' },
+  { value: 'Unknown', label: 'Unknown' },
+];
+
 export function PostCallModal({ isOpen, onClose, callData, onSave }: PostCallModalProps) {
-  const [outcome, setOutcome] = useState('Connected - Interested');
+  const [outcome, setOutcome] = useState('Connected - Qualified Lead');
   const [notes, setNotes] = useState('');
-  const [followupRequired, setFollowupRequired] = useState(false);
+  const [customerRequirement, setCustomerRequirement] = useState('');
+  const [painPoints, setPainPoints] = useState('');
+  const [customerInterest, setCustomerInterest] = useState<'High' | 'Medium' | 'Low' | 'None'>('High');
+  const [buyingIntent, setBuyingIntent] = useState<'Immediate' | 'This Week' | 'This Month' | '1-3 Months' | 'Later' | 'Unknown'>('This Month');
+  const [budget, setBudget] = useState('');
+  const [objections, setObjections] = useState('');
+  const [competitor, setCompetitor] = useState('');
+  const [nextAction, setNextAction] = useState('');
+  const [nextActionDate, setNextActionDate] = useState('');
+  const [followupRequired, setFollowupRequired] = useState(true);
   const [followupDate, setFollowupDate] = useState('');
   const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState<string[]>(['Outbound Call']);
+  const [tags, setTags] = useState<string[]>(['Outbound Call', 'Call Intelligence']);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setOutcome('Connected - Interested');
+      setOutcome('Connected - Qualified Lead');
       setNotes('');
-      setFollowupRequired(false);
+      setCustomerRequirement('');
+      setPainPoints('');
+      setCustomerInterest('High');
+      setBuyingIntent('This Month');
+      setBudget('');
+      setObjections('');
+      setCompetitor('');
+      setNextAction('');
+      setNextActionDate('');
+      setFollowupRequired(true);
       setFollowupDate('');
-      setTags(['Outbound Call']);
+      setTags(['Outbound Call', 'Call Intelligence']);
     }
   }, [isOpen]);
 
@@ -87,11 +134,20 @@ export function PostCallModal({ isOpen, onClose, callData, onSave }: PostCallMod
       await onSave({
         outcome,
         notes,
+        customerRequirement,
+        painPoints,
+        customerInterest,
+        buyingIntent,
+        budget,
+        objections,
+        competitor,
+        nextAction,
+        nextActionDate,
         followupRequired,
-        followupDate: followupRequired ? followupDate : undefined,
+        followupDate: followupRequired ? (followupDate || nextActionDate) : undefined,
         tags
       });
-      showToast('Call notes logged successfully', 'success');
+      showToast('Call Intelligence logged successfully', 'success');
       onClose();
     } catch (err) {
       console.error(err);
@@ -105,12 +161,12 @@ export function PostCallModal({ isOpen, onClose, callData, onSave }: PostCallMod
     <Dialog
       open={isOpen}
       onOpenChange={onClose}
-      title="Post-Call Summary & Notes"
-      description="Record meeting outcome, key notes, and schedule follow-up actions."
+      title="Post-Call Intelligence & Sales Summary"
+      description="Record meeting outcomes, pain points, customer intent, objections, and next actions."
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
         {/* Call Summary Banner */}
-        <div className="p-3 rounded-lg border border-primary/30 bg-primary/10 flex items-center justify-between text-xs">
+        <div className="p-3 rounded-xl border border-primary/30 bg-primary/10 flex items-center justify-between text-xs">
           <div className="flex items-center space-x-2">
             <PhoneCall className="h-4 w-4 text-primary" />
             <div>
@@ -137,46 +193,128 @@ export function PostCallModal({ isOpen, onClose, callData, onSave }: PostCallMod
           required
         />
 
-        {/* Call Notes Textarea */}
+        {/* Customer Interest & Buying Intent */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Select
+            label="Prospect Interest Level *"
+            options={INTEREST_LEVELS}
+            value={customerInterest}
+            onChange={(e) => setCustomerInterest(e.target.value as any)}
+          />
+          <Select
+            label="Buying Intent Timeline *"
+            options={BUYING_INTENTS}
+            value={buyingIntent}
+            onChange={(e) => setBuyingIntent(e.target.value as any)}
+          />
+        </div>
+
+        {/* Customer Requirement & Pain Points */}
+        <div className="space-y-3 pt-1">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+              Customer Requirement & Scope
+            </label>
+            <input
+              type="text"
+              placeholder="What software/service solution do they need?"
+              value={customerRequirement}
+              onChange={(e) => setCustomerRequirement(e.target.value)}
+              className="w-full bg-secondary/35 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+              Customer Pain Points
+            </label>
+            <input
+              type="text"
+              placeholder="What current bottlenecks or challenges are they experiencing?"
+              value={painPoints}
+              onChange={(e) => setPainPoints(e.target.value)}
+              className="w-full bg-secondary/35 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        {/* Objections & Competitor */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+              Objections Raised
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Budget constraints, implementation time"
+              value={objections}
+              onChange={(e) => setObjections(e.target.value)}
+              className="w-full bg-secondary/35 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+              Competitor Mentioned
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Salesforce, HubSpot, Zoho"
+              value={competitor}
+              onChange={(e) => setCompetitor(e.target.value)}
+              className="w-full bg-secondary/35 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Call Summary Notes */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5 text-primary" />
-            Call Notes
+            Executive Conversation Summary
           </label>
           <textarea
-            className="flex min-h-[90px] w-full rounded-lg border border-border/40 bg-secondary/35 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-            placeholder="Type key call points, requirements, or next steps..."
+            className="flex min-h-[80px] w-full rounded-lg border border-border/40 bg-secondary/35 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            placeholder="Key discussion summary, agreements reached, or pricing discussed..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
 
-        {/* Follow-up Section */}
-        <div className="p-3 rounded-lg border border-border/30 bg-secondary/20 space-y-2">
-          <label className="flex items-center space-x-2 cursor-pointer text-xs font-medium">
-            <input
-              type="checkbox"
-              checked={followupRequired}
-              onChange={(e) => setFollowupRequired(e.target.checked)}
-              className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-            />
-            <span className="text-foreground">Requires Follow-up Action</span>
-          </label>
+        {/* Next Action & Follow-up */}
+        <div className="p-3.5 rounded-xl border border-border/30 bg-secondary/20 space-y-3">
+          <h4 className="text-xs font-bold text-foreground flex items-center space-x-1.5">
+            <Target className="h-4 w-4 text-primary" />
+            <span>Next Action Commitment</span>
+          </h4>
 
-          {followupRequired && (
-            <div className="pt-2 animate-in fade-in">
-              <Input
-                label="Follow-up Date"
-                type="date"
-                value={followupDate}
-                onChange={(e) => setFollowupDate(e.target.value)}
-                required={followupRequired}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] text-muted-foreground block mb-1">Next Action Required</label>
+              <input
+                type="text"
+                placeholder="e.g. Send technical proposal & schedule demo"
+                value={nextAction}
+                onChange={(e) => setNextAction(e.target.value)}
+                className="w-full bg-background border border-border/40 rounded-lg px-3 py-1.5 text-xs text-foreground"
               />
             </div>
-          )}
+            <div>
+              <label className="text-[11px] text-muted-foreground block mb-1">Next Action Date</label>
+              <input
+                type="date"
+                value={nextActionDate}
+                onChange={(e) => {
+                  setNextActionDate(e.target.value);
+                  setFollowupDate(e.target.value);
+                }}
+                className="w-full bg-background border border-border/40 rounded-lg px-3 py-1.5 text-xs text-foreground cursor-pointer"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Tags Section */}
+        {/* Tags */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
             <Tag className="h-3.5 w-3.5 text-primary" />
@@ -205,7 +343,7 @@ export function PostCallModal({ isOpen, onClose, callData, onSave }: PostCallMod
             Skip Notes
           </Button>
           <Button type="submit" isLoading={isSaving}>
-            <CheckCircle className="mr-1.5 h-4 w-4" /> Save Call Log
+            <CheckCircle className="mr-1.5 h-4 w-4" /> Save Call Intelligence
           </Button>
         </div>
       </form>

@@ -155,6 +155,19 @@ create table if not exists public.call_logs (
   followup_required boolean default false,
   followup_date date,
   tags text[],
+  customer_requirement text,
+  pain_points text,
+  customer_interest text check (customer_interest in ('High', 'Medium', 'Low', 'None')),
+  buying_intent text check (buying_intent in ('Immediate', 'This Week', 'This Month', '1-3 Months', 'Later', 'Unknown')),
+  decision_maker text,
+  budget text,
+  timeline text,
+  objections text,
+  competitor text,
+  next_action text,
+  next_action_owner text,
+  next_action_date date,
+  transcript text,
   created_at timestamptz not null default now()
 );
 

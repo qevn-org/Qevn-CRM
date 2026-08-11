@@ -39,6 +39,16 @@ export async function POST(request: NextRequest) {
     const tags = Array.isArray(payload.tags) ? payload.tags : ['Twilio Call'];
     const recordingUrl = payload.recordingUrl || payload.RecordingUrl || `https://api.twilio.com/2010-04-01/Accounts/ACmock/Recordings/RE${Date.now()}.mp3`;
 
+    const customerRequirement = payload.customerRequirement;
+    const painPoints = payload.painPoints;
+    const customerInterest = payload.customerInterest;
+    const buyingIntent = payload.buyingIntent;
+    const budget = payload.budget;
+    const objections = payload.objections;
+    const competitor = payload.competitor;
+    const nextAction = payload.nextAction;
+    const nextActionDate = payload.nextActionDate;
+
     console.log(`[TWILIO CALL STATUS API] CallSid: ${callSid} | Status: ${status} | Duration: ${duration}s | Phone: ${phoneNumber}`);
 
     // Save call log in DB
@@ -58,7 +68,16 @@ export async function POST(request: NextRequest) {
       recording_duration: duration,
       followup_required: followupRequired,
       followup_date: followupDate,
-      tags
+      tags,
+      customer_requirement: customerRequirement,
+      pain_points: painPoints,
+      customer_interest: customerInterest,
+      buying_intent: buyingIntent,
+      budget,
+      objections,
+      competitor,
+      next_action: nextAction,
+      next_action_date: nextActionDate
     });
 
     // Create activity timeline entry
