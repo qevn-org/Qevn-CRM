@@ -9,8 +9,12 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
+import { ProposalInvoiceWizard } from '@/components/documents/proposal-invoice-wizard';
+import { Button } from '@/components/ui/button';
+
 export default function FinancePage() {
   const { user } = useStore();
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [proposals, setProposals] = useState<ProposalContract[]>([
     {
       id: 'prop1',
@@ -83,17 +87,28 @@ export default function FinancePage() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="text-right">
-            <span className="text-xs text-muted-foreground block">Collected Revenue</span>
-            <span className="text-xl font-black text-emerald-400">₹{totalRevenue.toLocaleString()}</span>
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <span className="text-xs text-muted-foreground block">Collected Revenue</span>
+              <span className="text-xl font-black text-emerald-400">₹{totalRevenue.toLocaleString()}</span>
+            </div>
+            <div className="text-right border-l border-border/30 pl-4">
+              <span className="text-xs text-muted-foreground block">Pending Receivables</span>
+              <span className="text-xl font-black text-amber-300">₹{pendingReceivables.toLocaleString()}</span>
+            </div>
           </div>
-          <div className="text-right border-l border-border/30 pl-4">
-            <span className="text-xs text-muted-foreground block">Pending Receivables</span>
-            <span className="text-xl font-black text-amber-300">₹{pendingReceivables.toLocaleString()}</span>
-          </div>
+
+          <Button onClick={() => setWizardOpen(true)} className="shadow-lg shadow-primary/25 cursor-pointer">
+            <Plus className="mr-1.5 h-4 w-4" /> Generate Proposal & Invoice
+          </Button>
         </div>
       </div>
+
+      <ProposalInvoiceWizard
+        isOpen={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+      />
 
       {/* Proposals & Contracts Card */}
       <Card>

@@ -98,8 +98,56 @@ export const emailTemplates = {
         <p>Use your email address and default password: <b>password</b> to access the portal.</p>
         <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login" style="display: inline-block; padding: 10px 20px; background-color: #6366f1; color: white; text-decoration: none; border-radius: 4px; margin-top: 10px;">Login to CRM</a>
         <footer style="margin-top: 20px; font-size: 12px; color: #64748b;">
-          Sent from hello@qevn.in - QEVN Client Management Team
+          QEVN CRM Team • Support: hello@qevn.in
         </footer>
+      </div>
+    `
+  }),
+
+  proposalInvoice: (proposalTitle: string, invoiceNumber: string, amount: number, clientName: string) => ({
+    subject: `Commercial Proposal & Tax Invoice (${invoiceNumber}) - QEVN`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+        <div style="text-align: center; padding-bottom: 20px; border-bottom: 2px solid #6366f1;">
+          <h1 style="color: #1e1b4b; margin: 0; font-size: 24px;">QEVN TECHNOLOGIES</h1>
+          <p style="color: #6366f1; font-weight: bold; margin-top: 4px; font-size: 14px;">Commercial Proposal & Tax Invoice Package</p>
+        </div>
+
+        <div style="padding: 20px 0;">
+          <p style="font-size: 15px; color: #334155;">Dear <strong>${clientName}</strong>,</p>
+          <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+            We are pleased to submit the official commercial proposal <strong>"${proposalTitle}"</strong> along with Tax Invoice <strong>#${invoiceNumber}</strong>.
+          </p>
+
+          <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <table style="width: 100%; font-size: 14px; color: #334155;">
+              <tr>
+                <td style="padding: 4px 0; color: #64748b;">Invoice Reference:</td>
+                <td style="padding: 4px 0; font-weight: bold; text-align: right;">${invoiceNumber}</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: #64748b;">Commercial Value:</td>
+                <td style="padding: 4px 0; font-weight: bold; text-align: right; color: #16a34a; font-size: 16px;">₹${amount.toLocaleString()} + 18% GST</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: #64748b;">Status:</td>
+                <td style="padding: 4px 0; font-weight: bold; text-align: right; color: #2563eb;">Dispatched & Pending Signature</td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+            The complete 8-page Technical Proposal breakdown, SLA terms, milestone timelines, and GST tax payment schedule are attached.
+          </p>
+
+          <div style="text-align: center; margin-top: 24px;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://crm.qevn.in'}/employee/finance" style="display: inline-block; padding: 12px 28px; background-color: #6366f1; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;">Review & Approve Document Online</a>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid #e2e8f0; pt-16px; margin-top: 24px; font-size: 12px; color: #94a3b8; text-align: center;">
+          <p>© 2026 QEVN CRM & Enterprise Automation Platform • All Rights Reserved</p>
+        </div>
       </div>
     `
   }),

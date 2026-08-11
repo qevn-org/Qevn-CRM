@@ -20,6 +20,8 @@ import {
 import Link from 'next/link';
 import { ClickToCall } from '@/components/ui/click-to-call';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { ProposalInvoiceWizard } from '@/components/documents/proposal-invoice-wizard';
+import { FileText as DocIcon, DollarSign as DollarIcon } from 'lucide-react';
 
 interface ClientDetailPageProps {
   params: Promise<{ id: string }>;
@@ -29,6 +31,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
   const router = useRouter();
   const { id: clientId } = use(params);
   const { user } = useStore();
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   // Data States
   const [client, setClient] = useState<Client | null>(null);
@@ -358,22 +361,39 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
   return (
     <div className="space-y-6">
       {/* Back button and profile title */}
-      <div className="flex items-center space-x-3">
-        <Link href="/employee/clients">
-          <Button variant="outline" size="sm" className="p-2">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div>
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Client Profile</span>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center">
-            {client.client_name}
-            <Badge variant="outline" className="ml-3 border-primary/40 bg-primary/10 text-primary">
-              {client.status}
-            </Badge>
-          </h2>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <Link href="/employee/clients">
+            <Button variant="outline" size="sm" className="p-2">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Client Profile</span>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center">
+              {client.client_name}
+              <Badge variant="outline" className="ml-3 border-primary/40 bg-primary/10 text-primary">
+                {client.status}
+              </Badge>
+            </h2>
+          </div>
         </div>
+
+        <Button
+          onClick={() => setWizardOpen(true)}
+          className="shadow-lg shadow-primary/25 cursor-pointer"
+        >
+          <DocIcon className="mr-2 h-4 w-4 text-emerald-300" />
+          Generate Proposal & Invoice
+        </Button>
       </div>
+
+      <ProposalInvoiceWizard
+        isOpen={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        clientData={client}
+        onSuccess={fetchData}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left column: Core parameters cards */}
