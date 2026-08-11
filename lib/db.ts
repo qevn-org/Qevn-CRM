@@ -71,7 +71,7 @@ export const db = {
     logAuth('Executing complete session logout and cache invalidation');
     try {
       if (isSupabaseConfigured() && supabase) {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'global' });
       }
     } catch (e) {
       console.error('[AUTH_LOGOUT] Error signing out from Supabase:', e);
@@ -276,6 +276,7 @@ export const db = {
   },
 
   async createClient(client: Omit<Client, 'id' | 'created_at' | 'archived'>): Promise<Client | null> {
+    let created: Client | null = null;
     if (useSupabase(client.employee_id || undefined) && supabase) {
       const { data, error } = await supabase
         .from('clients')
@@ -286,7 +287,7 @@ export const db = {
         console.error('Error creating client in Supabase:', error);
         return null;
       }
-      return data;
+      created = data;
     } else {
       const mockDb = getMockDB();
       const newClient: Client = {
@@ -297,11 +298,23 @@ export const db = {
       };
       mockDb.clients.push(newClient);
       saveMockDB(mockDb);
-      return newClient;
+      created = newClient;
     }
+
+    if (created && client.employee_id) {
+      await this.createActivity({
+        client_id: created.id,
+        employee_id: client.employee_id,
+        action: 'Lead Created',
+        description: `New lead created: ${created.client_name} (${created.company_name})`
+      });
+    }
+
+    return created;
   },
 
   async updateClient(clientId: string, clientData: Partial<Client>): Promise<Client | null> {
+    let updated: Client | null = null;
     if (useSupabase(clientId) && supabase) {
       const { data, error } = await supabase
         .from('clients')
@@ -310,7 +323,7 @@ export const db = {
         .select()
         .single();
       if (error) return null;
-      return data;
+      updated = data;
     } else {
       const mockDb = getMockDB();
       const idx = mockDb.clients.findIndex(c => c.id === clientId);
@@ -321,8 +334,22 @@ export const db = {
         ...clientData
       };
       saveMockDB(mockDb);
-      return mockDb.clients[idx];
+      updated = mockDb.clients[idx];
     }
+
+    if (updated && updated.employee_id) {
+      const desc = clientData.status 
+        ? `Lead status updated to "${clientData.status}" for ${updated.client_name}`
+        : `Lead details updated for ${updated.client_name}`;
+      await this.createActivity({
+        client_id: updated.id,
+        employee_id: updated.employee_id,
+        action: 'Lead Updated',
+        description: desc
+      });
+    }
+
+    return updated;
   },
 
   async deleteClient(clientId: string): Promise<boolean> {
