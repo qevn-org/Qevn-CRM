@@ -75,6 +75,11 @@ export const Sidebar: React.FC = () => {
     { name: 'Admin Dashboard', href: '/admin/dashboard', icon: Shield },
     { name: 'EOD Dashboard', href: '/admin/eod', icon: FileText },
     { name: 'Employees', href: '/admin/employees', icon: Users },
+    { name: 'Proposals', href: '/employee/proposals', icon: FileText },
+    { name: 'Contracts', href: '/employee/contracts', icon: ScrollText },
+    { name: 'Invoices', href: '/employee/invoices', icon: Receipt },
+    { name: 'Support Tickets', href: '/employee/tickets', icon: Ticket },
+    { name: 'Finance Overview', href: '/employee/finance', icon: DollarSign },
     { name: 'Activity Log', href: '/admin/activities', icon: Activity },
   ];
 
