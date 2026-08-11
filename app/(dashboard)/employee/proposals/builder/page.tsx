@@ -1,20 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import React, { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useStore } from '@/lib/store/use-store';
 import { ProposalDocument, renderProposalHTML, calculateProposalTotals } from '@/lib/proposal-document';
 import { ProposalDocumentRenderer } from '@/components/proposals/proposal-document-renderer';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/components/ui/toast';
 import { 
-  ArrowLeft, Save, Download, Send, Copy, Eye, Plus, Trash2, 
-  Layers, Palette, ChevronRight, CheckCircle2, Globe, Sparkles
+  ArrowLeft, Save, Download, Send, Copy, Plus, Trash2, 
+  Layers, ChevronRight, CheckCircle2, Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ProposalBuilderPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const propId = searchParams.get('id');
   const { user } = useStore();
@@ -41,20 +40,33 @@ export default function ProposalBuilderPage() {
     ],
     exec_summary: 'QEVN has conducted a thorough architectural review of current outbound lead generation workflows. We recognize that INFINIUM GLOBAL RESEARCH requires a modern, scalable outbound engine that moves beyond manual prospecting into fully automated AI-driven multi-agent pipelines.',
     comparison_rows: [
-      { challenge: 'High cost & slow manual prospecting', solution: 'AI multi-agent pipeline scales outreach at 1/10th traditional cost' },
-      { challenge: 'Low email reply rates & spam risks', solution: 'Hyper-personalized messaging with domain protection & warmups' },
-      { challenge: 'Unverified lead data & high bounce rates', solution: 'Multi-provider real-time verification before dispatch' },
+      { challenge: 'Need for qualified leads', solution: 'AI multi-agent pipeline researches & identifies high-fit prospects' },
+      { challenge: 'Need for verified contacts', solution: 'Multi-provider real-time email & phone verification engine' },
+      { challenge: 'Need for personalized outreach', solution: 'AI-generated prospect-specific messaging matching ICP persona' },
+      { challenge: 'Need for scalable outbound', solution: 'Automated AI pipeline operating 24/7 without headcount growth' },
+      { challenge: 'Need for conversion visibility', solution: 'Unified CRM analytics with call intelligence & meeting tracking' },
+      { challenge: 'Need for future product engineering', solution: 'Dedicated product development capability for custom MVP' },
     ],
     status: 'Draft'
   });
 
   const { grandTotal } = calculateProposalTotals(doc.line_items);
 
+  // All 13 Master Pages
   const pages = [
     { id: 'p1_cover', title: '1. Cover Page' },
     { id: 'p2_exec', title: '2. Executive Summary' },
-    { id: 'p4_challenges', title: '3. Challenges Matrix' },
-    { id: 'p7_pricing', title: '4. Pricing & Investment' },
+    { id: 'p3_scope', title: '3. About QEVN & Scope' },
+    { id: 'p4_challenges', title: '4. Challenges Matrix' },
+    { id: 'p5_arch', title: '5. Solution Architecture' },
+    { id: 'p6_enrichment', title: '6. Personalization & Benefits' },
+    { id: 'p7_infra', title: '7. Mailing Infrastructure' },
+    { id: 'p8_dev', title: '8. Development Approach' },
+    { id: 'p9_cases', title: '9. Case Studies' },
+    { id: 'p7_pricing', title: '10. Pricing & Investment' },
+    { id: 'p11_timeline', title: '11. Milestone Timeline' },
+    { id: 'p12_deliverables', title: '12. Deliverables Checklist' },
+    { id: 'p13_terms', title: '13. Terms & Sign-Off' },
   ];
 
   const handleDownloadA4PDF = () => {
@@ -67,7 +79,7 @@ export default function ProposalBuilderPage() {
     const htmlContent = renderProposalHTML(doc);
     printWindow.document.write(htmlContent);
     printWindow.document.close();
-    showToast(`PDF Preview generated for Proposal ${doc.document_number}`, 'success');
+    showToast(`13-Page PDF Preview generated for Proposal ${doc.document_number}`, 'success');
   };
 
   const handleCopyPublicLink = () => {
@@ -94,7 +106,7 @@ export default function ProposalBuilderPage() {
           subject: `Commercial Proposal (${doc.document_number}) - QEVN`,
           html: htmlContent,
           employeeId: user?.id || 'usr_emp_1',
-          template: 'Commercial Proposal'
+          template: '13-Page Master Proposal'
         })
       });
 
@@ -102,7 +114,7 @@ export default function ProposalBuilderPage() {
 
       if (data.success) {
         setDoc({ ...doc, status: 'Sent' });
-        showToast(`Proposal ${doc.document_number} dispatched directly to ${doc.recipient_email}!`, 'success');
+        showToast(`13-Page Proposal ${doc.document_number} dispatched to ${doc.recipient_email}!`, 'success');
       } else {
         showToast(data.error || 'Failed to send email', 'error');
       }
@@ -115,7 +127,7 @@ export default function ProposalBuilderPage() {
   };
 
   const handleSaveDraft = () => {
-    showToast(`Proposal ${doc.document_number} (v${doc.version}) saved to database!`, 'success');
+    showToast(`13-Page Proposal ${doc.document_number} (v${doc.version}) saved to database!`, 'success');
   };
 
   const handleSelectPage = (id: string) => {
@@ -141,7 +153,7 @@ export default function ProposalBuilderPage() {
             <h1 className="text-base font-extrabold text-white flex items-center gap-2">
               {doc.proposal_title}
               <span className="text-xs font-bold text-lime-400 bg-lime-500/10 px-2 py-0.5 rounded border border-lime-500/20">
-                {doc.document_number} v{doc.version}
+                13 Pages • {doc.document_number} v{doc.version}
               </span>
             </h1>
             <p className="text-xs text-slate-400">Client: {doc.company_name} ({doc.client_name})</p>
@@ -153,8 +165,8 @@ export default function ProposalBuilderPage() {
             <Copy className="mr-1.5 h-3.5 w-3.5" /> Public Link
           </Button>
 
-          <Button variant="outline" size="sm" onClick={handleDownloadA4PDF} className="border-lime-500/40 text-lime-400 hover:bg-lime-500/10">
-            <Download className="mr-1.5 h-3.5 w-3.5" /> Download A4 PDF
+          <Button variant="outline" size="sm" onClick={handleDownloadA4PDF} className="border-lime-500/40 text-lime-400 hover:bg-lime-500/10 font-bold">
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Download 13-Page A4 PDF
           </Button>
 
           <Button size="sm" onClick={handleSendEmail} isLoading={isSending} className="bg-lime-600 hover:bg-lime-500 text-white font-bold">
@@ -171,9 +183,9 @@ export default function ProposalBuilderPage() {
       <div className="flex-1 flex overflow-hidden">
         
         {/* COLUMN 1: Left Page Navigation (240px) */}
-        <aside className="w-60 border-r border-slate-800 bg-slate-900/60 p-4 space-y-4 flex-shrink-0 overflow-y-auto">
+        <aside className="w-64 border-r border-slate-800 bg-slate-900/60 p-4 space-y-4 flex-shrink-0 overflow-y-auto">
           <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
-            <span className="flex items-center gap-1.5"><Layers className="h-3.5 w-3.5 text-lime-400" /> Document Pages</span>
+            <span className="flex items-center gap-1.5"><Layers className="h-3.5 w-3.5 text-lime-400" /> 13 Master Pages</span>
             <span>A4</span>
           </div>
 
@@ -182,14 +194,14 @@ export default function ProposalBuilderPage() {
               <button
                 key={p.id}
                 onClick={() => handleSelectPage(p.id)}
-                className={`w-full text-left p-3 rounded-xl font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                className={`w-full text-left p-2.5 rounded-xl font-semibold transition-all flex items-center justify-between cursor-pointer ${
                   activePageId === p.id 
                     ? 'bg-lime-500/15 border border-lime-500/40 text-lime-400 shadow-sm' 
                     : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                 }`}
               >
-                <span>{p.title}</span>
-                <ChevronRight className="h-3.5 w-3.5 opacity-50" />
+                <span className="truncate">{p.title}</span>
+                <ChevronRight className="h-3.5 w-3.5 opacity-50 flex-shrink-0" />
               </button>
             ))}
           </div>
@@ -232,7 +244,7 @@ export default function ProposalBuilderPage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">Client Entity Name</label>
+                  <label className="text-slate-400 font-semibold block mb-1">Client Company Entity</label>
                   <input
                     type="text"
                     value={doc.company_name}
@@ -262,7 +274,7 @@ export default function ProposalBuilderPage() {
               </div>
 
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">Executive Summary Text</label>
+                <label className="text-slate-400 font-semibold block mb-1">Executive Summary Narrative</label>
                 <textarea
                   rows={4}
                   value={doc.exec_summary}
