@@ -15,7 +15,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { showToast } from '@/components/ui/toast';
 import { 
   Plus, Search, Download, Edit3, Trash2, Archive, 
-  ExternalLink, Building2, User, Mail, Tag, FileSpreadsheet, UploadCloud 
+  ExternalLink, Building2, User, Mail, Tag, FileSpreadsheet, UploadCloud, AlertTriangle, CheckSquare, Square
 } from 'lucide-react';
 import Link from 'next/link';
 import { ImportModal } from '@/components/import/import-modal';
@@ -35,6 +35,11 @@ function ClientsContent() {
   const [priorityFilter, setPriorityFilter] = useState('All');
   const [industryFilter, setIndustryFilter] = useState('All');
   const [ownerFilter, setOwnerFilter] = useState('All');
+
+  // Selection & Bulk Action States
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Dialog States
   const [modalOpen, setModalOpen] = useState(false);
@@ -263,6 +268,54 @@ function ClientsContent() {
     return matchesSearch && matchesStatus && matchesPriority && matchesIndustry && matchesOwner;
   });
 
+  const allFilteredSelected = filteredClients.length > 0 && filteredClients.every(c => selectedClientIds.includes(c.id));
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      const filteredIds = new Set(filteredClients.map(c => c.id));
+      setSelectedClientIds(prev => prev.filter(id => !filteredIds.has(id)));
+    } else {
+      const newIds = new Set([...selectedClientIds, ...filteredClients.map(c => c.id)]);
+      setSelectedClientIds(Array.from(newIds));
+    }
+  };
+
+  const toggleSelectClient = (id: string) => {
+    setSelectedClientIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllLeadsInDatabase = () => {
+    setSelectedClientIds(clients.map(c => c.id));
+    showToast(`Selected all ${clients.length} leads in catalog`, 'info');
+  };
+
+  const handleClearSelection = () => {
+    setSelectedClientIds([]);
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (selectedClientIds.length === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      let count = 0;
+      for (const id of selectedClientIds) {
+        const ok = await db.deleteClient(id);
+        if (ok) count++;
+      }
+      showToast(`Successfully deleted ${count} leads`, 'success');
+      setSelectedClientIds([]);
+      setBulkDeleteModalOpen(false);
+      await fetchClients();
+    } catch (err) {
+      console.error(err);
+      showToast('Error deleting selected leads', 'error');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   const getPriorityColor = (p: string) => {
     if (p === 'High') return 'danger';
     if (p === 'Medium') return 'warning';
@@ -355,6 +408,46 @@ function ClientsContent() {
         </CardContent>
       </Card>
 
+      {/* BULK ACTION BAR */}
+      {selectedClientIds.length > 0 && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs shadow-sm">
+          <div className="flex items-center space-x-2">
+            <Badge variant="danger" className="font-bold px-2.5 py-1">
+              {selectedClientIds.length} Selected
+            </Badge>
+            <span className="text-muted-foreground font-medium">
+              out of {filteredClients.length} filtered leads ({clients.length} total)
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleSelectAllLeadsInDatabase}
+              className="text-xs h-8 border-slate-700"
+            >
+              Select All ({clients.length})
+            </Button>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={handleClearSelection}
+              className="text-xs h-8 text-muted-foreground hover:text-foreground"
+            >
+              Deselect All
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={() => setBulkDeleteModalOpen(true)}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs h-8"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete Selected ({selectedClientIds.length})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Main client table */}
       <Card>
         <CardContent className="p-0">
@@ -374,6 +467,15 @@ function ClientsContent() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="Select All Filtered Leads"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded accent-primary cursor-pointer align-middle"
+                    />
+                  </TableHead>
                   <TableHead>Client Details</TableHead>
                   <TableHead>Company</TableHead>
                   {user?.role === 'admin' && <TableHead>Lead Owner</TableHead>}
@@ -384,59 +486,71 @@ function ClientsContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredClients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <Link href={`/employee/clients/${client.id}`} className="font-bold text-foreground hover:text-primary transition-colors flex items-center">
-                          {client.client_name}
-                          <ExternalLink className="h-3 w-3 ml-1 opacity-0 hover:opacity-100 transition-opacity" />
-                        </Link>
-                        {client.designation && (
-                          <span className="text-[11px] text-muted-foreground">{client.designation}</span>
-                        )}
-                        {client.email && (
-                          <span className="text-[10px] text-muted-foreground flex items-center mt-0.5">
-                            <Mail className="h-2.5 w-2.5 mr-1" /> {client.email}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-medium text-foreground">{client.company_name}</span>
-                      {client.country && (
-                        <span className="text-[10px] text-muted-foreground block">{client.city ? `${client.city}, ` : ''}{client.country}</span>
-                      )}
-                    </TableCell>
-                    {user?.role === 'admin' && (
-                      <TableCell>
-                        <span className="text-xs font-semibold text-primary/95">{client.owner_name || 'Unknown'}</span>
+                {filteredClients.map((client) => {
+                  const isSelected = selectedClientIds.includes(client.id);
+                  return (
+                    <TableRow key={client.id} className={isSelected ? 'bg-primary/5' : ''}>
+                      <TableCell className="w-12 text-center">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${client.client_name}`}
+                          checked={isSelected}
+                          onChange={() => toggleSelectClient(client.id)}
+                          className="h-4 w-4 rounded accent-primary cursor-pointer align-middle"
+                        />
                       </TableCell>
-                    )}
-                    <TableCell>
-                      <span className="text-xs text-muted-foreground">{client.industry || '—'}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusColor(client.status)}>{client.status}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getPriorityColor(client.priority)}>{client.priority}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-1.5">
-                        <Button variant="ghost" size="sm" onClick={() => openEditModal(client)}>
-                          <Edit3 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleArchiveClient(client)}>
-                          <Archive className="h-4 w-4 text-amber-400" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteClient(client.id, client.client_name)}>
-                          <Trash2 className="h-4 w-4 text-red-400" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <Link href={`/employee/clients/${client.id}`} className="font-bold text-foreground hover:text-primary transition-colors flex items-center">
+                            {client.client_name}
+                            <ExternalLink className="h-3 w-3 ml-1 opacity-0 hover:opacity-100 transition-opacity" />
+                          </Link>
+                          {client.designation && (
+                            <span className="text-[11px] text-muted-foreground">{client.designation}</span>
+                          )}
+                          {client.email && (
+                            <span className="text-[10px] text-muted-foreground flex items-center mt-0.5">
+                              <Mail className="h-2.5 w-2.5 mr-1" /> {client.email}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium text-foreground">{client.company_name}</span>
+                        {client.country && (
+                          <span className="text-[10px] text-muted-foreground block">{client.city ? `${client.city}, ` : ''}{client.country}</span>
+                        )}
+                      </TableCell>
+                      {user?.role === 'admin' && (
+                        <TableCell>
+                          <span className="text-xs font-semibold text-primary/95">{client.owner_name || 'Unknown'}</span>
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground">{client.industry || '—'}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusColor(client.status)}>{client.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getPriorityColor(client.priority)}>{client.priority}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-1.5">
+                          <Button variant="ghost" size="sm" onClick={() => openEditModal(client)}>
+                            <Edit3 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleArchiveClient(client)}>
+                            <Archive className="h-4 w-4 text-amber-400" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteClient(client.id, client.client_name)}>
+                            <Trash2 className="h-4 w-4 text-red-400" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -560,6 +674,48 @@ function ClientsContent() {
             </Button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog
+        open={bulkDeleteModalOpen}
+        onOpenChange={setBulkDeleteModalOpen}
+        title={`Confirm Bulk Delete (${selectedClientIds.length} Leads)`}
+      >
+        <div className="space-y-4 py-2">
+          <div className="flex items-center space-x-3 bg-red-500/10 border border-red-500/20 p-3.5 rounded-xl text-red-400">
+            <AlertTriangle className="h-6 w-6 flex-shrink-0" />
+            <div className="text-xs">
+              <p className="font-bold text-sm text-red-300">Warning: Irreversible Bulk Delete</p>
+              <p className="mt-0.5 text-slate-300">
+                You are about to permanently delete <strong className="text-red-400 font-bold">{selectedClientIds.length} selected leads</strong> from the database. This action cannot be undone.
+              </p>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Are you sure you want to proceed with deleting these {selectedClientIds.length} lead records?
+          </p>
+
+          <div className="flex justify-end space-x-2 pt-4 border-t border-border/10">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setBulkDeleteModalOpen(false)}
+              disabled={isBulkDeleting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="button"
+              onClick={handleConfirmBulkDelete}
+              isLoading={isBulkDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold"
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" /> Permanently Delete {selectedClientIds.length} Leads
+            </Button>
+          </div>
+        </div>
       </Dialog>
 
       {/* Bulk Data Import Modal */}
